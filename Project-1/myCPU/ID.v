@@ -59,7 +59,7 @@ assign ID_allowin = ~valid | readygo & EX_allowin;
 
 wire            readygo;
 wire            need_pause;
-assign need_pause = (last_dest == rf_raddr1 || last_dest == rf_raddr2) & last_is_load;
+assign need_pause = (last_dest == rf_raddr1 || last_dest == rf_raddr2) & last_is_load & (last_dest != 0);
 assign readygo = ~need_pause | need_pause & last_MEM_done & (done_pc == last_pc);
 
 wire            predict;
