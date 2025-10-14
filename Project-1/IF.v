@@ -2,28 +2,22 @@ module IF (
         input   wire            clk,
         input   wire            rst,
         input   wire            flush,
+        input   wire            inst_ready,
+        input   wire            inst_valid,
 
         input   wire            ID_allowin,
 
         input   wire [31:0]     inst,
         input   wire [31:0]     pc_real,
-        output  reg  [31:0]     pc,
+        output  wire            inst_sram_en,
+        output  wire [31:0]     pc_next,
         output  reg  [64:0]     IF_to_ID_reg
 );
 
-reg             readygo;
-// readygo & ID_allowin
-always @(posedge clk) begin
-        if (rst) begin
-                readygo <= 1'b0;
-        end
-        else begin
-                readygo <= 1'b1;
-        end
-end
+`define PC_INIT 32'h1bfffffc
 
-// wire [31:0]     seq_pc;
-// wire [31:0]     nextpc;
+assign inst_sram_en = ~rst & ID_allowin;
+
 wire            predict;
 // wire            br_taken;
 // wire [31:0]     br_target;
@@ -39,8 +33,6 @@ wire            predict;
 // wire [15:0]     i16;
 // wire [25:0]     i26;
 
-reg  [31:0]     pc_reg;
-
 // assign op_31_26         = inst[31:26];
 // assign inst_jirl        = op_31_26_d[6'h13];
 // assign inst_b           = op_31_26_d[6'h14];
@@ -55,40 +47,48 @@ reg  [31:0]     pc_reg;
 //                                       {{14{i16[15]}}, i16[15:0], 2'b0};
 
 assign predict          = 1'b0;
-// assign seq_pc           = pc + 32'h4;
 // assign br_taken         = inst_beq & predict | inst_bne & predict | inst_bl | inst_b | inst_jirl;
 // assign br_target        = pc_reg + br_offs;
-// assign nextpc           = br_taken ? br_target : seq_pc;
 
 // decoder_6_64 u_dec0(.in(op_31_26), .out(op_31_26_d));
 
+reg  [31:0]     pc;
+reg  [31:0]     IR;
+
+assign pc_next = flush ? pc_real : pc + 4;
+
 always @(posedge clk) begin
         if (rst) begin
-                pc_reg <= 32'h1bfffffc;
+                pc <= `PC_INIT;
         end
+        else if (ID_allowin) begin 
+                pc <= pc_next;
+        end 
         else begin
-                pc_reg <= pc;
+                pc <= pc;
         end
 end
 
 always @(posedge clk) begin
         if (rst) begin
-                pc <= 32'h1bfffffc;
+                IR <= 32'b0;
         end
-        else if (flush) begin
-                pc <= pc_real;
+        else if (ID_allowin) begin
+                IR <= inst;
         end
         else begin
-                pc <= pc + 4;
+                IR <= IR;
         end
 end
 
 always @(posedge clk) begin
         if (rst) begin
-                IF_to_ID_reg <= {1'b0, 32'b0, 32'h1bfffffc};
+                IF_to_ID_reg <= {1'b0, 32'b0, `PC_INIT};
         end
-        else begin
-                IF_to_ID_reg <= {predict, inst, pc_reg};
+        else if (ID_allowin) begin
+                IF_to_ID_reg <= {predict, inst, pc};
+        end else begin
+                IF_to_ID_reg <= IF_to_ID_reg;
         end
 end
 

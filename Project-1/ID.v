@@ -1,11 +1,24 @@
 module ID(
         input   wire            clk,
         input   wire            rst,
-        input   wire [ 64:0]    IF_to_ID_bus,
+        input   wire            EX_allowin,
+        input   wire [ 64:0]    IF_to_ID_zip,
+
+        input   wire            last_MEM_done,
+        input   wire [ 31:0]    done_pc,
+        input   wire [ 31:0]    last_load_data,
+
+        input   wire            front_from_EX_valid,
+        input   wire [  4:0]    front_from_EX_addr,
+        input   wire [ 31:0]    front_from_EX_data,
+        input   wire            front_from_MEM_valid,
+        input   wire [  4:0]    front_from_MEM_addr,
+        input   wire [ 31:0]    front_from_MEM_data,
 
         input   wire [ 31:0]    rf_rdata1,
         input   wire [ 31:0]    rf_rdata2,
 
+        output  wire            ID_allowin,
         output  wire [  4:0]    rf_raddr1,
         output  wire [  4:0]    rf_raddr2,
         output  wire            flush,
@@ -13,24 +26,48 @@ module ID(
         output  reg  [181:0]    ID_to_EX_reg
 );
 
-reg             valid;
+reg  [31:0]     last_pc;
 always @(posedge clk) begin
-        if (rst | flush) begin
-                valid <= 1'b0;
+        if (rst) begin
+                last_pc <= 32'b0;
+        end
+        else if (EX_allowin & readygo) begin
+                last_pc <= pc;
         end
         else begin
-                valid <= 1'b1;
+                last_pc <= last_pc;
         end
 end
+
+reg             last_is_load;
+reg  [ 4:0]     last_dest;
+
+reg             valid;
+always @(posedge clk) begin
+        if (rst) begin
+                valid <= 1'b0;
+        end
+        else if (ID_allowin) begin
+                valid <= ~flush;
+        end
+        else begin
+                valid <= valid;
+        end
+end
+
+assign ID_allowin = ~valid | readygo & EX_allowin;
+
+wire            readygo;
+wire            need_pause;
+assign need_pause = (last_dest == rf_raddr1 || last_dest == rf_raddr2) & last_is_load;
+assign readygo = ~need_pause | need_pause & last_MEM_done & (done_pc == last_pc);
 
 wire            predict;
 wire [31:0]     pc;
 wire [31:0]     inst;
 assign {
         predict, inst, pc
-} = IF_to_ID_bus;
-
-wire            allowin;
+} = IF_to_ID_zip;
 
 wire [11:0]     alu_op;
 wire            load_op;
@@ -41,7 +78,7 @@ wire            dst_is_r1;
 wire            gr_we;
 wire            mem_we;
 wire            src_reg_is_rd;
-wire [4: 0]     dest;
+wire [ 4:0]     dest;
 wire [31:0]     rj_value;
 wire [31:0]     rkd_value;
 wire            rj_eq_rd;
@@ -190,8 +227,14 @@ assign  dest            = dst_is_r1 ? 5'd1 : rd;
 assign  rf_raddr1       = rj;
 assign  rf_raddr2       = src_reg_is_rd ? rd : rk;
 
-assign  rj_value        = rf_rdata1;
-assign  rkd_value       = rf_rdata2;
+assign  rj_value        = need_pause & (last_dest == rf_raddr1) ? last_load_data : 
+                          front_from_EX_valid & (front_from_EX_addr == rf_raddr1) ? front_from_EX_data :
+                          front_from_MEM_valid & (front_from_MEM_addr == rf_raddr1) ? front_from_MEM_data :
+                          rf_rdata1;
+assign  rkd_value       = need_pause & (last_dest == rf_raddr2) ? last_load_data : 
+                          front_from_EX_valid & (front_from_EX_addr == rf_raddr2) ? front_from_EX_data :
+                          front_from_MEM_valid & (front_from_MEM_addr == rf_raddr2) ? front_from_MEM_data :  
+                          rf_rdata2;
 
 assign  rj_eq_rd        = (rj_value == rkd_value);
 assign  br_taken        = (   inst_beq  &&  rj_eq_rd
@@ -206,13 +249,48 @@ assign  br_target       = (inst_beq || inst_bne || inst_bl || inst_b) ? (pc + br
 assign  flush           = ((br_taken ^ predict) | inst_jirl) & ~rst & valid;
 
 always @(posedge clk) begin
-        ID_to_EX_reg <= {
-                valid & ~rst, 
-                pc, inst,
-                src1_is_pc ? pc : rj_value,
-                src2_is_imm ? imm : rkd_value,
-                alu_op, inst_ld_w, mem_we, res_from_mem, gr_we, rkd_value, dest
-                };
+        if (rst) begin
+                ID_to_EX_reg <= 182'b0;
+        end
+        else if (EX_allowin & readygo) begin
+                ID_to_EX_reg <= {
+                        valid & ~rst, 
+                        pc, inst,
+                        src1_is_pc ? pc : rj_value,
+                        src2_is_imm ? imm : rkd_value,
+                        alu_op, inst_ld_w, mem_we, res_from_mem, gr_we, rkd_value, dest
+                        };
+        end
+        else if (EX_allowin & ~readygo) begin
+                ID_to_EX_reg <= 182'b0;
+        end
+        else begin
+                ID_to_EX_reg <= ID_to_EX_reg;
+        end
+end
+
+always @(posedge clk) begin
+        if (rst) begin
+                last_is_load <= 1'b0;
+        end
+        else if (EX_allowin & readygo) begin
+                last_is_load <= inst_ld_w;
+        end
+        else begin
+                last_is_load <= last_is_load;
+        end
+end
+
+always @(posedge clk) begin
+        if (rst) begin
+                last_dest <= 5'b0;
+        end
+        else if (EX_allowin & readygo) begin
+                last_dest <= dest;
+        end
+        else begin
+                last_dest <= last_dest;
+        end
 end
 
 assign pc_real = {32{flush}} & br_target;

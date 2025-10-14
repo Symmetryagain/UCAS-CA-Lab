@@ -1,8 +1,9 @@
 module WB(
         input   wire            clk,
         input   wire            rst,
-        input   wire [103:0]    MEM_to_WB_bus,
-        input   wire [ 31:0]    read_data,
+        input   wire [102:0]    MEM_to_WB_zip,
+        
+        output  wire            WB_allowin,
         output  wire            rf_wen,
         output  wire [  4:0]    rf_waddr,
         output  wire [ 31:0]    rf_wdata,
@@ -13,14 +14,12 @@ wire            valid;
 wire [31:0]     pc;
 wire [31:0]     IR;
 wire            gr_we;
-wire            res_from_mem;
-wire [31:0]     alu_result;
 
-assign rf_wdata = res_from_mem ? read_data : alu_result;
+assign WB_allowin = 1'b1;
 
 assign {
-    valid, pc, IR, res_from_mem, gr_we, rf_waddr, alu_result
-} = MEM_to_WB_bus;
+    valid, pc, IR, gr_we, rf_waddr, rf_wdata
+} = MEM_to_WB_zip;
 
 assign rf_wen   = gr_we & valid;
 
