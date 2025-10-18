@@ -25,11 +25,13 @@ wire            gr_we;
 wire [31:0]     rkd_value;
 wire [ 4:0]     rf_waddr;
 
+reg             EX_readygo;
+
 assign front_valid = ~inst_ld_w & gr_we;
 assign front_addr = rf_waddr;
 assign front_data = alu_result;
 
-assign EX_allowin = ~valid | MEM_allowin;
+assign EX_allowin = ~valid | EX_readygo & MEM_allowin;
 
 assign  {
         valid, pc, IR, src1, src2, aluop, EX_to_MEM_zip
@@ -49,10 +51,21 @@ alu u_alu(
 );
 
 always @(posedge clk) begin
+    if (rst) begin
+        EX_readygo <= 1'b0;
+    end
+    else if()begin
+        EX_readygo <= 1'b1;
+    end
+    else
+        EX_readygo <= 1'b0;
+end
+
+always @(posedge clk) begin
         if (rst) begin
                 EX_to_MEM_reg <= 138'b0;
         end
-        else if (MEM_allowin) begin
+        else if (EX_readygo & MEM_allowin) begin
                 EX_to_MEM_reg <= {valid & ~rst, pc, IR, EX_to_MEM_zip, alu_result};
         end
         else begin
