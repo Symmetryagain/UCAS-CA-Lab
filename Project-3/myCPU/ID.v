@@ -23,7 +23,7 @@ module ID(
         output  wire [  4:0]    rf_raddr2,
         output  wire            flush,
         output  wire [ 31:0]    pc_real,
-        output  reg  [184:0]    ID_to_EX_reg
+        output  reg  [188:0]    ID_to_EX_reg
 );
 
 reg  [31:0]     last_pc;
@@ -138,6 +138,10 @@ wire            inst_pcaddu12i;
 wire            inst_mul;
 wire            inst_mulh;
 wire            inst_mulhu;
+wire            inst_div;
+wire            inst_mod;
+wire            inst_divu;
+wire            inst_modu;
 
 wire            need_ui5;
 wire            need_ui12;
@@ -201,6 +205,10 @@ assign  inst_pcaddu12i  = op_31_26_d[6'h07] & ~inst[25];
 assign  inst_mul        = op_31_26_d[6'h00] & op_25_22_d[4'h0] & op_21_20_d[2'h1] & op_19_15_d[5'h18];
 assign  inst_mulh       = op_31_26_d[6'h00] & op_25_22_d[4'h0] & op_21_20_d[2'h1] & op_19_15_d[5'h19];
 assign  inst_mulhu      = op_31_26_d[6'h00] & op_25_22_d[4'h0] & op_21_20_d[2'h1] & op_19_15_d[5'h1a];
+assign  inst_div        = op_31_26_d[6'h00] & op_25_22_d[4'h0] & op_21_20_d[2'h2] & op_19_15_d[5'h00];
+assign  inst_mod        = op_31_26_d[6'h00] & op_25_22_d[4'h0] & op_21_20_d[2'h2] & op_19_15_d[5'h01];
+assign  inst_divu       = op_31_26_d[6'h00] & op_25_22_d[4'h0] & op_21_20_d[2'h2] & op_19_15_d[5'h02];
+assign  inst_modu       = op_31_26_d[6'h00] & op_25_22_d[4'h0] & op_21_20_d[2'h2] & op_19_15_d[5'h03];
 
 assign  alu_op[ 0]      = inst_add_w | inst_addi_w | inst_ld_w | inst_st_w
                          | inst_jirl | inst_bl | inst_pcaddu12i;
@@ -287,7 +295,7 @@ assign  flush           = ((br_taken ^ predict) | inst_jirl) & ~rst & valid;
 
 always @(posedge clk) begin
         if (rst) begin
-                ID_to_EX_reg <= 182'b0;
+                ID_to_EX_reg <= 189'b0;
         end
         else if (EX_allowin & readygo) begin
                 ID_to_EX_reg <= {
@@ -296,11 +304,11 @@ always @(posedge clk) begin
                         src1_is_pc ? pc : rj_value,
                         src2_is_imm ? imm : rkd_value,
                         alu_op, inst_ld_w, mem_we, res_from_mem, gr_we, rkd_value, dest,
-                        inst_mul, inst_mulh, inst_mulhu
+                        inst_mul, inst_mulh, inst_mulhu, inst_div, inst_mod, inst_divu, inst_modu
                         };
         end
         else if (EX_allowin & ~readygo) begin
-                ID_to_EX_reg <= 185'b0;
+                ID_to_EX_reg <= 189'b0;
         end
         else begin
                 ID_to_EX_reg <= ID_to_EX_reg;
