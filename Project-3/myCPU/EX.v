@@ -92,9 +92,13 @@ assign udiv_src_ready = udiv_src_1_ready & udiv_src_2_ready;
 
 wire            src_ready;
 wire            res_valid;
-assign src_ready = use_div & div_src_ready | use_udiv & udiv_res_ready;
+assign src_ready = use_div & div_src_ready | use_udiv & udiv_src_ready;
 assign res_valid = use_div & div_res_valid | use_udiv & udiv_res_valid;
 
+assign div_src_valid = wait_src_ready;
+assign udiv_src_valid = wait_src_ready;
+assign div_res_ready = wait_res_valid;
+assign udiv_res_ready = wait_res_valid;
 
 reg             init;
 reg             wait_src_ready;
@@ -117,7 +121,6 @@ mydiv signed_div (
     .s_axis_dividend_tready(div_src_2_ready),  
     .s_axis_dividend_tdata(src1),  
     .m_axis_dout_tvalid(div_res_valid),
-    .m_axis_dout_tready(div_res_ready),
     .m_axis_dout_tdata(div_result)
 );
 
@@ -130,7 +133,6 @@ unsigned_div unsigned_div (
     .s_axis_dividend_tready(udiv_src_2_ready),  
     .s_axis_dividend_tdata(src1),  
     .m_axis_dout_tvalid(udiv_res_valid),
-    .m_axis_dout_tready(udiv_res_ready),
     .m_axis_dout_tdata(udiv_result)
 );
 
@@ -197,6 +199,9 @@ always @(posedge clk) begin
         end
         else if (readygo & MEM_allowin) begin
                 EX_to_MEM_reg <= {valid & ~rst, pc, IR, EX_to_MEM_zip, compute_result};
+        end
+        else if (~readygo & MEM_allowin) begin
+                EX_to_MEM_reg <= 138'b0;
         end
         else begin
                 EX_to_MEM_reg <= EX_to_MEM_reg;

@@ -48,7 +48,7 @@ always @(posedge clk) begin
         if (rst) begin
                 readygo <= 1'b0;
         end
-        else if (~readygo & (data_ready | data_valid)) begin
+        else if (~readygo & (data_ready | data_valid) & valid) begin
                 readygo <= 1'b1;
         end
         else if (readygo & WB_allowin) begin
