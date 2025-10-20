@@ -23,7 +23,7 @@ module ID(
         output  wire [  4:0]    rf_raddr2,
         output  wire            flush,
         output  wire [ 31:0]    pc_real,
-        output  reg  [181:0]    ID_to_EX_reg
+        output  reg  [184:0]    ID_to_EX_reg
 );
 
 reg  [31:0]     last_pc;
@@ -135,6 +135,10 @@ wire            inst_srl;
 wire            inst_sra;
 wire            inst_pcaddu12i;
 
+wire            inst_mul;
+wire            inst_mulh;
+wire            inst_mulhu;
+
 wire            need_ui5;
 wire            need_ui12;
 wire            need_si12;
@@ -193,6 +197,10 @@ assign  inst_sll        = op_31_26_d[6'h00] & op_25_22_d[4'h0] & op_21_20_d[2'h1
 assign  inst_srl        = op_31_26_d[6'h00] & op_25_22_d[4'h0] & op_21_20_d[2'h1] & op_19_15_d[5'h0f];
 assign  inst_sra        = op_31_26_d[6'h00] & op_25_22_d[4'h0] & op_21_20_d[2'h1] & op_19_15_d[5'h10];
 assign  inst_pcaddu12i  = op_31_26_d[6'h07] & ~inst[25];
+
+assign  inst_mul        = op_31_26_d[6'h00] & op_25_22_d[4'h0] & op_21_20_d[2'h1] & op_19_15_d[5'h18];
+assign  inst_mulh       = op_31_26_d[6'h00] & op_25_22_d[4'h0] & op_21_20_d[2'h1] & op_19_15_d[5'h19];
+assign  inst_mulhu      = op_31_26_d[6'h00] & op_25_22_d[4'h0] & op_21_20_d[2'h1] & op_19_15_d[5'h1a];
 
 assign  alu_op[ 0]      = inst_add_w | inst_addi_w | inst_ld_w | inst_st_w
                          | inst_jirl | inst_bl | inst_pcaddu12i;
@@ -287,11 +295,12 @@ always @(posedge clk) begin
                         pc, inst,
                         src1_is_pc ? pc : rj_value,
                         src2_is_imm ? imm : rkd_value,
-                        alu_op, inst_ld_w, mem_we, res_from_mem, gr_we, rkd_value, dest
+                        alu_op, inst_ld_w, mem_we, res_from_mem, gr_we, rkd_value, dest,
+                        inst_mul, inst_mulh, inst_mulhu
                         };
         end
         else if (EX_allowin & ~readygo) begin
-                ID_to_EX_reg <= 182'b0;
+                ID_to_EX_reg <= 185'b0;
         end
         else begin
                 ID_to_EX_reg <= ID_to_EX_reg;
