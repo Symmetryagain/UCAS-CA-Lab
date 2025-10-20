@@ -44,14 +44,17 @@ assign {
         inst_ld_w, mem_we, res_from_mem, gr_we, rkd_value, rf_waddr
 } = EX_to_MEM_zip;
 
-wire [31:0]     alu_result, compute_result;
-wire [63:0]     product, u_product;
+wire [31:0]     alu_result;
+wire [31:0]     compute_result;
+wire [33:0]     mul_src1;
+wire [33:0]     mul_src2;
+wire [65:0]     prod;
 
-assign          product         = signed(src1)   * signed(src2);
-assign          u_product       = unsigned(src1) * unsigned(src2);
-assign          compute_result  = inst_mul?     product[31:0]:
-                                  inst_mulh?    product[63:32]:
-                                  inst_mulhu?   u_product[63:32]:
+assign          mul_src1        = {~inst_mulhu & src1[31], src1};
+assign          mul_src2        = {~inst_mulhu & src2[31], src2};
+assign          prod            = $signed(mul_src1) * $signed(mul_src2);
+assign          compute_result  = inst_mul?                     prod[31:0]:
+                                  inst_mulh | inst_mulhu?       prod[63:32]:
                                   alu_result;
 
 alu u_alu(
