@@ -32,13 +32,11 @@ wire            gr_we;
 wire [31:0]     rkd_value;
 wire [ 4:0]     rf_waddr;
 
-reg             EX_readygo;
-
 assign front_valid = ~inst_ld_w & gr_we;
 assign front_addr = rf_waddr;
 assign front_data = alu_result;
 
-assign EX_allowin = ~valid | EX_readygo & MEM_allowin;
+assign EX_allowin = ~valid | readygo & MEM_allowin;
 
 assign  {
         valid, pc, IR, src1, src2, aluop, EX_to_MEM_zip, 
@@ -52,8 +50,8 @@ assign {
 
 wire [31:0]     alu_result;
 wire [31:0]     compute_result;
-wire [33:0]     mul_src1;
-wire [33:0]     mul_src2;
+wire [32:0]     mul_src1;
+wire [32:0]     mul_src2;
 wire [65:0]     prod;
 
 assign          mul_src1        = {~inst_mulhu & src1[31], src1};
@@ -67,53 +65,41 @@ assign          compute_result  = inst_mul?                     prod[31:0]:
                                   inst_modu?                    udiv_result[31:0]:
                                   alu_result;
 
+wire            use_div;
+wire            use_udiv;
+wire            div_or_udiv;
+assign use_div = inst_div | inst_mod;
+assign use_udiv = inst_divu | inst_modu;
+assign div_or_udiv = use_div | use_udiv;
+
 wire [63:0]     div_result;
-reg             div_src_valid;     
+wire            div_src_valid;
+wire            div_src_1_ready;
+wire            div_src_2_ready;
 wire            div_src_ready;
-wire            div_res_valid;        
-reg             div_res_ready;
+wire            div_res_ready;
+wire            div_res_valid;
+assign div_src_ready = div_src_1_ready & div_src_2_ready;
 
 wire [63:0]     udiv_result;
-reg             udiv_src_valid;     
-wire            udiv_src_ready;
-wire            udiv_res_valid;        
-reg             udiv_res_ready;
+wire            udiv_src_valid;
+wire            udiv_src_1_ready;
+wire            udiv_src_2_ready;
+wire            udiv_src_ready;       
+wire            udiv_res_ready;
+wire            udiv_res_valid;
+assign udiv_src_ready = udiv_src_1_ready & udiv_src_2_ready;
 
-always @(posedge clk)begin
-        if(rst)
-                div_src_valid <= 0;
-        else if(valid & (inst_div | inst_mod))
-                div_src_valid <= 1;
-        else
-                div_src_valid <= 0;
-end
+wire            src_ready;
+wire            res_valid;
+assign src_ready = use_div & div_src_ready | use_udiv & udiv_res_ready;
+assign res_valid = use_div & div_res_valid | use_udiv & udiv_res_valid;
 
-always @(posedge clk)begin
-        if(rst)
-                udiv_src_valid <= 0;
-        else if(valid & (inst_divu | inst_modu))
-                udiv_src_valid <= 1;
-        else
-                udiv_src_valid <= 0;
-end
 
-always @(posedge clk)begin
-        if(rst)
-                div_res_ready <= 0;
-        else if(div_src_valid)
-                div_res_ready <= 1;
-        else if(div_res_valid)
-                div_res_ready <= 0;
-end
-
-always @(posedge clk)begin
-        if(rst)
-                udiv_res_ready <= 0;
-        else if(udiv_src_valid)
-                udiv_res_ready <= 1;
-        else if(udiv_res_valid)
-                udiv_res_ready <= 0;
-end
+reg             init;
+reg             wait_src_ready;
+reg             wait_res_valid;
+reg             readygo;
 
 alu u_alu(
     .alu_op     (aluop),
@@ -125,10 +111,10 @@ alu u_alu(
 mydiv signed_div (
     .aclk(clk),
     .s_axis_divisor_tvalid(div_src_valid),
-    .s_axis_divisor_tready(),  
+    .s_axis_divisor_tready(div_src_1_ready),  
     .s_axis_divisor_tdata(src2), 
     .s_axis_dividend_tvalid(div_src_valid),
-    .s_axis_dividend_tready(),  
+    .s_axis_dividend_tready(div_src_2_ready),  
     .s_axis_dividend_tdata(src1),  
     .m_axis_dout_tvalid(div_res_valid),
     .m_axis_dout_tready(div_res_ready),
@@ -138,10 +124,10 @@ mydiv signed_div (
 unsigned_div unsigned_div (
     .aclk(clk),
     .s_axis_divisor_tvalid(udiv_src_valid),
-    .s_axis_divisor_tready(),  
+    .s_axis_divisor_tready(udiv_src_1_ready),  
     .s_axis_divisor_tdata(src2), 
     .s_axis_dividend_tvalid(udiv_src_valid),
-    .s_axis_dividend_tready(),  
+    .s_axis_dividend_tready(udiv_src_2_ready),  
     .s_axis_dividend_tdata(src1),  
     .m_axis_dout_tvalid(udiv_res_valid),
     .m_axis_dout_tready(udiv_res_ready),
@@ -149,21 +135,67 @@ unsigned_div unsigned_div (
 );
 
 always @(posedge clk) begin
-    if (rst) begin
-        EX_readygo <= 1'b0;
-    end
-    else if()begin
-        EX_readygo <= 1'b1;
-    end
-    else
-        EX_readygo <= 1'b0;
+        if (rst) begin
+                init <= 1'b1;
+        end
+        else if (readygo & MEM_allowin) begin
+                init <= 1'b1;
+        end
+        else begin
+                init <= 1'b0;
+        end
+end
+
+always @(posedge clk) begin
+        if (rst) begin
+                wait_src_ready <= 1'b0;
+        end
+        else if (init & div_or_udiv) begin
+                wait_src_ready <= 1'b1;
+        end
+        else if (wait_src_ready & src_ready) begin
+                wait_src_ready <= 1'b0;
+        end
+        else begin
+                wait_src_ready <= wait_src_ready;
+        end
+end
+
+always @(posedge clk) begin
+        if (rst) begin
+                wait_res_valid <= 1'b0;
+        end
+        else if (wait_src_ready & src_ready) begin
+                wait_res_valid <= 1'b1;
+        end
+        else if (wait_res_valid & res_valid) begin
+                wait_res_valid <= 1'b0;
+        end
+        else begin
+                wait_res_valid <= wait_res_valid;
+        end
+end
+
+always @(posedge clk) begin
+        if (rst) begin
+                readygo <= 1'b0;
+        end
+        else if (init & ~div_or_udiv | wait_res_valid & res_valid) begin
+                readygo <= 1'b1;
+        end
+        else if (readygo & MEM_allowin) begin
+                readygo <= 1'b0;
+        end
+        else begin
+                readygo <= readygo;
+        end
 end
 
 always @(posedge clk) begin
         if (rst) begin
                 EX_to_MEM_reg <= 138'b0;
         end
-        else if (EX_readygo & MEM_allowin) begin
+        else if (readygo & MEM_allowin) begin
                 EX_to_MEM_reg <= {valid & ~rst, pc, IR, EX_to_MEM_zip, compute_result};
         end
         else begin
