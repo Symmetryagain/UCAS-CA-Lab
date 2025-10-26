@@ -82,6 +82,8 @@ wire [ 4:0]     dest;
 wire [31:0]     rj_value;
 wire [31:0]     rkd_value;
 wire            rj_eq_rd;
+wire            rj_lt_rd;
+wire            rj_lt_rd_u;
 wire [31:0]     imm;
 wire [31:0]     br_offs;
 wire [31:0]     jirl_offs;
@@ -142,6 +144,11 @@ wire            inst_div;
 wire            inst_mod;
 wire            inst_divu;
 wire            inst_modu;
+
+wire            inst_blt;
+wire            inst_bge;
+wire            inst_bltu;
+wire            inst_bgeu;
 
 wire            need_ui5;
 wire            need_ui12;
@@ -210,6 +217,11 @@ assign  inst_mod        = op_31_26_d[6'h00] & op_25_22_d[4'h0] & op_21_20_d[2'h2
 assign  inst_divu       = op_31_26_d[6'h00] & op_25_22_d[4'h0] & op_21_20_d[2'h2] & op_19_15_d[5'h02];
 assign  inst_modu       = op_31_26_d[6'h00] & op_25_22_d[4'h0] & op_21_20_d[2'h2] & op_19_15_d[5'h03];
 
+assign  inst_blt        = op_31_26_d[6'h18];
+assign  inst_bge        = op_31_26_d[6'h19];
+assign  inst_bltu       = op_31_26_d[6'h1a];
+assign  inst_bgeu       = op_31_26_d[6'h1b];
+
 assign  alu_op[ 0]      = inst_add_w | inst_addi_w | inst_ld_w | inst_st_w
                          | inst_jirl | inst_bl | inst_pcaddu12i;
 assign  alu_op[ 1]      = inst_sub_w;
@@ -243,7 +255,7 @@ assign  br_offs         = need_si26 ? {{ 4{i26[25]}}, i26[25:0], 2'b0} :
 
 assign  jirl_offs       = {{14{i16[15]}}, i16[15:0], 2'b0};
 
-assign  src_reg_is_rd   = inst_beq | inst_bne | inst_st_w;
+assign  src_reg_is_rd   = inst_beq | inst_bne | inst_st_w | inst_blt | inst_bge | inst_bltu | inst_bgeu;
 
 assign  src1_is_pc      = inst_jirl | inst_bl | inst_pcaddu12i;
 
@@ -265,7 +277,7 @@ assign  src2_is_imm     = inst_slli_w |
 
 assign  res_from_mem    = inst_ld_w;
 assign  dst_is_r1       = inst_bl;
-assign  gr_we           = ~inst_st_w & ~inst_beq & ~inst_bne & ~inst_b;
+assign  gr_we           = ~inst_st_w & ~inst_beq & ~inst_bne & ~inst_b & ~inst_blt & ~inst_bge & ~inst_bltu & ~inst_bgeu;
 assign  mem_we          = inst_st_w;
 assign  dest            = dst_is_r1 ? 5'd1 : rd;
 
@@ -282,13 +294,19 @@ assign  rkd_value       = need_pause & (last_dest == rf_raddr2) ? last_load_data
                           rf_rdata2;
 
 assign  rj_eq_rd        = (rj_value == rkd_value);
+assign  rj_lt_rd        = (rj_value[31] != rkd_value[31]) ? rj_value[31] : (rj_value < rkd_value);
+assign  rj_lt_rd_u      = rj_value < rkd_value;
 assign  br_taken        = (   inst_beq  &&  rj_eq_rd
                            || inst_bne  && !rj_eq_rd
+                           || inst_blt  &&  rj_lt_rd
+                           || inst_bge  && !rj_lt_rd
+                           || inst_bltu &&  rj_lt_rd_u
+                           || inst_bgeu && !rj_lt_rd_u
                            || inst_jirl
                            || inst_bl
                            || inst_b
                           ) && valid;
-assign  br_target       = (inst_beq || inst_bne || inst_bl || inst_b) ? (pc + br_offs) :
+assign  br_target       = (inst_beq || inst_bne || inst_bl || inst_b || inst_blt || inst_bge || inst_bltu || inst_bgeu) ? (pc + br_offs) :
                                                    /*inst_jirl*/ (rj_value + jirl_offs);
 
 assign  flush           = ((br_taken ^ predict) | inst_jirl) & ~rst & valid;
