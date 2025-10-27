@@ -2,12 +2,12 @@ module EX(
         input   wire            clk,
         input   wire            rst,
         input   wire            MEM_allowin,
-        input   wire [188:0]    ID_to_EX_zip,
+        input   wire [195:0]    ID_to_EX_zip,
         output  wire            front_valid,
         output  wire [  4:0]    front_addr,
         output  wire [ 31:0]    front_data,
         output  wire            EX_allowin,
-        output  reg  [137:0]    EX_to_MEM_reg
+        output  reg  [144:0]    EX_to_MEM_reg
 );
 
 wire            valid;
@@ -16,9 +16,17 @@ wire [31:0]     IR;
 wire [31:0]     src1;
 wire [31:0]     src2;
 wire [11:0]     aluop;
-wire [40:0]     EX_to_MEM_zip;
+wire [47:0]     EX_to_MEM_zip;
 
 wire            inst_ld_w;
+wire            inst_ld_b;
+wire            inst_ld_h;
+wire            inst_ld_bu;
+wire            inst_ld_hu;
+wire            inst_st_b;
+wire            inst_st_h;
+wire            inst_st_w;
+
 wire            inst_mul;
 wire            inst_mulh;
 wire            inst_mulhu;
@@ -32,7 +40,7 @@ wire            gr_we;
 wire [31:0]     rkd_value;
 wire [ 4:0]     rf_waddr;
 
-assign front_valid = ~inst_ld_w & gr_we;
+assign front_valid = ~res_from_mem & gr_we;
 assign front_addr = rf_waddr;
 assign front_data = alu_result;
 
@@ -44,7 +52,9 @@ assign  {
 } = ID_to_EX_zip;
 
 assign {
-        inst_ld_w, mem_we, res_from_mem, gr_we, rkd_value, rf_waddr
+        inst_ld_b, inst_ld_bu, inst_ld_h, inst_ld_hu, inst_ld_w, 
+        inst_st_b, inst_st_h, inst_st_w,
+        mem_we, res_from_mem, gr_we, rkd_value, rf_waddr
 } = EX_to_MEM_zip;
 
 
@@ -195,13 +205,13 @@ end
 
 always @(posedge clk) begin
         if (rst) begin
-                EX_to_MEM_reg <= 138'b0;
+                EX_to_MEM_reg <= 144'b0;
         end
         else if (readygo & MEM_allowin) begin
                 EX_to_MEM_reg <= {valid & ~rst, pc, IR, EX_to_MEM_zip, compute_result};
         end
         else if (~readygo & MEM_allowin) begin
-                EX_to_MEM_reg <= 138'b0;
+                EX_to_MEM_reg <= 144'b0;
         end
         else begin
                 EX_to_MEM_reg <= EX_to_MEM_reg;

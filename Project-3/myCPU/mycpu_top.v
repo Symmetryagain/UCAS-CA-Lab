@@ -42,8 +42,8 @@ assign data_valid = 1'b1;
 
 // internal pipeline zipes
 wire [64:0]  IF_to_ID_reg;
-wire [188:0] ID_to_EX_reg;
-wire [137:0] EX_to_MEM_reg;
+wire [195:0] ID_to_EX_reg;
+wire [144:0] EX_to_MEM_reg;
 wire [102:0] MEM_to_WB_reg;
 
 // IF <-> ID signals
