@@ -355,7 +355,7 @@ always @(posedge clk) begin
                 };
         end
         else if (EX_allowin & ~readygo) begin
-                ID_to_EX_reg <= 189'b0;
+                ID_to_EX_reg <= 196'b0;
         end
         else begin
                 ID_to_EX_reg <= ID_to_EX_reg;
