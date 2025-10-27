@@ -26,7 +26,16 @@ module MEM(
 wire            valid;
 wire [31:0]     pc;
 wire [31:0]     IR;
+
 wire            inst_ld_w;
+wire            inst_ld_b;
+wire            inst_ld_h;
+wire            inst_ld_bu;
+wire            inst_ld_hu;
+wire            inst_st_b;
+wire            inst_st_h;
+wire            inst_st_w;
+
 wire            mem_we;
 wire            res_from_mem;
 wire            gr_we;
@@ -39,6 +48,9 @@ wire [31:0]     rf_wdata_ld_b;
 wire [31:0]     rf_wdata_ld_bu;
 wire [31:0]     rf_wdata_ld_h;
 wire [31:0]     rf_wdata_ld_hu;
+
+wire [3:0]      write_we_st_b;
+wire [3:0]      write_we_st_h;
 
 assign done_pc = pc;
 assign front_valid = ~res_from_mem & gr_we;
@@ -101,11 +113,11 @@ assign write_en         = (mem_we | res_from_mem) & valid;
 
 assign write_we_st_b    = (write_addr[1:0]==2'b00)? 4'b0001:
                           (write_addr[1:0]==2'b01)? 4'b0010:
-                          (write_addr[1:0]==2'b10)? 4'b0010:
+                          (write_addr[1:0]==2'b10)? 4'b0100:
                           4'b1000;
 assign write_we_st_h    = (write_addr[1:0]==2'b00)? 4'b0011:
                           4'b1100;                          
-assign write_we         = 4{valid} & 
+assign write_we         = {4{valid}} & 
                           inst_st_b? write_we_st_b:
                           inst_st_h? write_we_st_h:
                           inst_st_w? 4'b1111:

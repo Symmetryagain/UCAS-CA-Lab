@@ -197,8 +197,7 @@ assign  inst_slli_w     = op_31_26_d[6'h00] & op_25_22_d[4'h1] & op_21_20_d[2'h0
 assign  inst_srli_w     = op_31_26_d[6'h00] & op_25_22_d[4'h1] & op_21_20_d[2'h0] & op_19_15_d[5'h09];
 assign  inst_srai_w     = op_31_26_d[6'h00] & op_25_22_d[4'h1] & op_21_20_d[2'h0] & op_19_15_d[5'h11];
 assign  inst_addi_w     = op_31_26_d[6'h00] & op_25_22_d[4'ha];
-assign  inst_ld_w       = op_31_26_d[6'h0a] & op_25_22_d[4'h2];
-assign  inst_st_w       = op_31_26_d[6'h0a] & op_25_22_d[4'h6];
+
 assign  inst_jirl       = op_31_26_d[6'h13];
 assign  inst_b          = op_31_26_d[6'h14];
 assign  inst_bl         = op_31_26_d[6'h15];
@@ -231,11 +230,12 @@ assign  inst_bgeu       = op_31_26_d[6'h1b];
 
 assign  inst_ld_b       = op_31_26_d[6'h0a] & op_25_22_d[4'h0];
 assign  inst_ld_h       = op_31_26_d[6'h0a] & op_25_22_d[4'h1];
-assign  inst_ld_bu      = op_31_26_d[6'h0a] & op_25_22_d[4'h8];
-assign  inst_ld_hu      = op_31_26_d[6'h0a] & op_25_22_d[4'h9];
+assign  inst_ld_w       = op_31_26_d[6'h0a] & op_25_22_d[4'h2];
 assign  inst_st_b       = op_31_26_d[6'h0a] & op_25_22_d[4'h4];
 assign  inst_st_h       = op_31_26_d[6'h0a] & op_25_22_d[4'h5];
-
+assign  inst_st_w       = op_31_26_d[6'h0a] & op_25_22_d[4'h6];
+assign  inst_ld_bu      = op_31_26_d[6'h0a] & op_25_22_d[4'h8];
+assign  inst_ld_hu      = op_31_26_d[6'h0a] & op_25_22_d[4'h9];
 
 assign  alu_op[ 0]      = inst_add_w | inst_addi_w | inst_ld_w | inst_st_w
                          | inst_ld_b | inst_ld_bu |inst_ld_h | inst_ld_hu | inst_st_b | inst_st_h
