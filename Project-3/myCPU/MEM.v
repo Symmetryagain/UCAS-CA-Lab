@@ -118,10 +118,10 @@ assign write_we_st_b    = (write_addr[1:0]==2'b00)? 4'b0001:
 assign write_we_st_h    = (write_addr[1:0]==2'b00)? 4'b0011:
                           4'b1100;                          
 assign write_we         = {4{valid}} & 
-                          inst_st_b? write_we_st_b:
+                          (inst_st_b? {write_we_st_b}:
                           inst_st_h? write_we_st_h:
                           inst_st_w? 4'b1111:
-                          4'b0000;
+                          4'b0000);
                   
 assign write_addr       = alu_result;
 assign write_data       = inst_st_b? {4{rkd_value[7:0]}}:

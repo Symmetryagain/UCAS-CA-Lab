@@ -6,54 +6,50 @@
 \usepackage{amsmath, amsthm, amssymb, bm, color, framed, graphicx, hyperref, mathrsfs, physics}
 \hypersetup{hidelinks,colorlinks=true,allcolors=black,pdfstartview=Fit,breaklinks=true}
 
-\title{Project 2 实验报告}
-\author{石曜铭 2023K8009929037}
-\date{10/14/2025}
+\title{Project 3 实验报告}
+\author{钱翰林 周远扬 石曜铭}
+\date{10/28/2025}
 
 \begin{document}
 \maketitle
 
+\section{小组分工情况说明}
+\begin{itemize}
+        \item 钱翰林：IP 核接口，访存指令实现
+        \item 周远扬：运算指令、分支指令实现
+        \item 石曜铭：调整流水线握手信号，报告撰写
+\end{itemize}
+
 \section{处理器结构设计图}
+与 exp9 一致。
 \begin{figure}[htbp]
         \centering
         \includegraphics[width=16cm]{pics/graph.png}
 \end{figure}
 
+
 \section{主要设计点}
 
-\subsection{握手信号设计}
+\subsection{EX 多周期的状态设计}
 
-\begin{itemize}
-        \item $\texttt{valid}$: 在每个模块内部维护，表示该模块该周期是否有效，即未被flush掉。
-        \item $\texttt{readygo}$: 拉高表示该模块已经做好准备将数据传到下个阶段。
-        \item $\texttt{allowin}$: 拉高表示该模块下个周期可以接受来自上个阶段的数据。
-\end{itemize}
+由于除法器的存在，为了满足时序要求，需要将 EX 阶段改为多周期。
+EX 阶段有 $4$ 个状态，分别是 $\texttt{init, wait\_src\_ready, wait\_res\_valid, readygo}$ 。
+初始状态为 $\texttt{init}$，当检测到指令不需要除法时，则直接转到 $\texttt{readygo}$ 状态。
+如果指令需要除法，则要先后经过两个等待状态，得到结果后在进入 $\texttt{readygo}$ 状态。
 
-$\texttt{allowin}$ 表达式：$\texttt{allowin} = (!\texttt{valid}) | (\texttt{readygo} \& \texttt{next\_allowin})$ 。
-这里第一项表示如果当前状态无效，那么可以接受上个阶段的数据以挤掉气泡；第二项表示如果该阶段数据即将进入下个阶段，那么也可以接受上个阶段的数据。
+注意这里因为 EX 阶段不再是单周期，连带着 MEM 阶段的一些时序也需要修改。
+原先的时序是默认 EX 阶段只有一个周期，所以修改 EX 之后会导致时序错乱而在一些测试点上保持阻塞。
 
-\subsection{与内存交互的时序设计}
-本实验中的 SRAM 是同步写同步读的，意味着与内存的交互都需要经过一个周期才会真正结束。
-具体体现在取指阶段和 load 指令，都需要等待一个周期才能得到结果。虽然可以通过将数据接收放在下个阶段来解决，但这样难以扩展到多周期等待的内存交互。
+\subsection{除法 IP 核的生成和接入}
+本实验中采用直接生成除法 IP 核的做法。在 Vivado 中分别生成有符号和无符号除法 IP 核后，接入 EX 阶段的握手信号和数据信号。
+由于除法 IP 核中有两个源操作数的 $\texttt{ready}$ 信号，实际应当对两个信号取与，才能作为源操作数的 $\texttt{ready}$ 信号。
 
-于是，对于 load 指令，我选择模拟一个内存握手信号，恒置为 $1$，这样就会自然有一个周期的等待。
+\subsection{运算和分支指令的实现}
+这两类指令的实现都在 ID 阶段。在译码时，如果检测到运算指令，则传递对应的 $\texttt{ALUop}$。
+如果检测到分支指令，则判断条件之后决定是否修改 $\texttt{PC}$。
 
-在 IF 阶段，因为指令是同步读的，所以每次输出的 PC 实际上是 nextPC，这样下个周期自然得到了与当前真正 PC 对应的指令。
-
-\subsection{数据冲突：数据前递}
-数据冲突本质上是当前指令是寄存器写，在还没有到 WB 阶段时，另一条指令的 ID 阶段恰好需要读这个寄存器。
-
-数据前递用来解决写寄存器的数据在 EX 产生的情况。
-只需要分别在 EX 阶段和 MEM 阶段输出已经确定的寄存器写的值和地址，接到 ID 阶段，那么在 ID 阶段就可以直接得到前两条指令的寄存器写信息，跟当前需要读的寄存器做比较，讨论情况即可。
-
-寄存器的代码也要做一个改动，即如果异步读的地址恰好等于写地址，就直接把写数据返回。这样就可以对每条指令只往后考虑两条指令的数据前递。
-
-\subsection{数据冲突：Load-Use 阻塞}
-如果写寄存器的数据在 MEM 阶段才产生，那么就无法通过数据前递来解决冲突。在 ID 阶段，当检测到一条指令的上一条指令是 load，且写寄存器的地址恰好被读，那么需要阻塞该阶段直到上一条指令的 MEM 阶段完成，
-并再开一个信号用来传递内存读出的数据。
-
-\subsection{控制冒险}
-如果一条指令在 ID 阶段被发现不应该执行，那么应该把 $\texttt{valid}$ 置为 $0$，表示该指令的数据失效。
-相应地，为了保证被失效的指令不会对控制信号产生影响，应该把所有的控制信号都和 $\texttt{valid}$ 取与，这样可以避免控制冒险，例如避免被跳过的 branch 指令还会影响 PC 跳转的情况。
+\subsection{访存指令的实现}
+为了添加更多的访存指令，从 ID 向 EX 和 MEM 多传递了不同位数的访存信号；在 MEM 阶段，根据访存的位数以及内存对齐情况返回不同的结果。
+相应地，阶段之间传递数据的位宽也进行了修改。
 
 \end{document}
