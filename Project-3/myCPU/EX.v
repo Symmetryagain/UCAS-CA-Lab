@@ -205,13 +205,13 @@ end
 
 always @(posedge clk) begin
         if (rst) begin
-                EX_to_MEM_reg <= 144'b0;
+                EX_to_MEM_reg <= 145'b0;
         end
         else if (readygo & MEM_allowin) begin
                 EX_to_MEM_reg <= {valid & ~rst, pc, IR, EX_to_MEM_zip, compute_result};
         end
         else if (~readygo & MEM_allowin) begin
-                EX_to_MEM_reg <= 144'b0;
+                EX_to_MEM_reg <= 145'b0;
         end
         else begin
                 EX_to_MEM_reg <= EX_to_MEM_reg;
