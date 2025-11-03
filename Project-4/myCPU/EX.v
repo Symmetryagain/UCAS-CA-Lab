@@ -3,11 +3,13 @@ module EX(
         input   wire            rst,
         input   wire            MEM_allowin,
         input   wire [195:0]    ID_to_EX_zip,
+        input   wire [ 81:0]    ID_except_reg,
         output  wire            front_valid,
         output  wire [  4:0]    front_addr,
         output  wire [ 31:0]    front_data,
         output  wire            EX_allowin,
-        output  reg  [144:0]    EX_to_MEM_reg
+        output  reg  [144:0]    EX_to_MEM_reg,
+        output  reg  [ 81:0]    EX_except_reg
 );
 
 wire            valid;
@@ -39,6 +41,13 @@ wire            res_from_mem;
 wire            gr_we;
 wire [31:0]     rkd_value;
 wire [ 4:0]     rf_waddr;
+wire            csr_re;
+wire [13:0]     csr_num;
+wire            csr_we;
+wire [31:0]     csr_wmask;
+wire [31:0]     csr_wvalue;
+wire            inst_syscall;
+wire            inst_ertn;
 
 assign front_valid = ~res_from_mem & gr_we;
 assign front_addr = rf_waddr;
@@ -57,6 +66,7 @@ assign {
         mem_we, res_from_mem, gr_we, rkd_value, rf_waddr
 } = EX_to_MEM_zip;
 
+assign {csr_re, csr_we, csr_wmask, csr_wvalue, csr_num, inst_ertn, inst_syscall} = ID_except_reg;
 
 wire [31:0]     alu_result;
 wire [31:0]     compute_result;
@@ -206,15 +216,19 @@ end
 always @(posedge clk) begin
         if (rst) begin
                 EX_to_MEM_reg <= 145'b0;
+                EX_except_reg <= 82'b0;
         end
         else if (readygo & MEM_allowin) begin
                 EX_to_MEM_reg <= {valid & ~rst, pc, IR, EX_to_MEM_zip, compute_result};
+                EX_except_reg <= ID_except_reg;
         end
         else if (~readygo & MEM_allowin) begin
                 EX_to_MEM_reg <= 145'b0;
+                EX_except_reg <= 82'b0;
         end
         else begin
                 EX_to_MEM_reg <= EX_to_MEM_reg;
+                EX_except_reg <= EX_except_reg;
         end
 end
 

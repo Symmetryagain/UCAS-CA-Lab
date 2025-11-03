@@ -11,7 +11,10 @@ module IF (
         input   wire [31:0]     pc_real,
         output  wire            inst_sram_en,
         output  wire [31:0]     pc_next,
-        output  reg  [64:0]     IF_to_ID_reg
+        output  reg  [64:0]     IF_to_ID_reg,
+
+        input   wire            ertn_flush,
+        input   wire [31:0]     ertn_entry
 );
 
 `define PC_INIT 32'h1bfffffc
@@ -55,7 +58,9 @@ assign predict          = 1'b0;
 reg  [31:0]     pc;
 reg  [31:0]     IR;
 
-assign pc_next = flush ? pc_real : pc + 4;
+assign pc_next = ertn_flush ? ertn_entry:
+                        flush ? pc_real 
+                        : pc + 4;
 
 always @(posedge clk) begin
         if (rst) begin
