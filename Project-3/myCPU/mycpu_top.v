@@ -74,6 +74,19 @@ wire [31:0]    loaded_data;
 
 wire [31:0]    done_pc;
 
+// csr signals
+wire            csr_re;
+wire [13:0]     csr_num;
+wire [31:0]     csr_rvalue;
+wire            csr_we;
+wire [31:0]     csr_wmask;
+wire [31:0]     csr_wvalue;
+wire            ertn_flush;
+wire            wb_ex;  
+wire  [31:0]    wb_pc;
+wire  [ 5:0]    wb_ecode;
+wire  [ 8:0]    wb_esubcode;
+
 // IF instance
 IF u_IF (
     .clk            (clk),
@@ -172,6 +185,25 @@ regfile u_regfile (
     .we     (wb_rf_wen),
     .waddr  (wb_rf_waddr),
     .wdata  (wb_rf_wdata)
+);
+
+// csr instance
+csr u_csr(
+    .clk       (clk),
+    .reset     (~resetn),
+
+    .csr_re    (csr_re),
+    .csr_num   (csr_num),
+    .csr_rvalue(csr_rvalue),
+    .csr_we    (csr_we),
+    .csr_wmask (csr_wmask),
+    .csr_wvalue(csr_wvalue),
+
+    .ertn_flush(ertn_flush), 
+    .wb_ex     (wb_ex),
+    .wb_pc     (wb_pc), 
+    .wb_ecode  (wb_ecode),
+    .wb_esubcode(wb_esubcode)
 );
 
 // tie-off instruction sram write controls (read-only from CPU)

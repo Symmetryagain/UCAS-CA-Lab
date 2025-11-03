@@ -122,7 +122,7 @@ alu u_alu(
     .alu_result (alu_result)
 );
 
-mydiv signed_div (
+signed_div signed_div (
     .aclk(clk),
     .s_axis_divisor_tvalid(div_src_valid),
     .s_axis_divisor_tready(div_src_1_ready),  

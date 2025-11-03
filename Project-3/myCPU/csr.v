@@ -23,6 +23,7 @@
 `define CSR_ERA_PC      31:0
 `define CSR_EENTRY_VA   31:6
 `define CSR_SAVE_DATA   31:0
+`define CSR_TICLR_CLR   0
 
 
 module csr(
@@ -33,7 +34,13 @@ module csr(
         output  wire [31:0]     csr_rvalue,
         input   wire            csr_we,
         input   wire [31:0]     csr_wmask,
-        input   wire [31:0]     csr_wvalue      
+        input   wire [31:0]     csr_wvalue,
+
+        input  wire             ertn_flush,
+        input  wire             wb_ex,  
+        input  wire  [31:0]     wb_pc,
+        input  wire  [ 5:0]     wb_ecode,  
+        input  wire  [ 8:0]     wb_esubcode
 );
 
 wire [31: 0] csr_crmd_data;
@@ -62,9 +69,23 @@ reg  [31: 0] csr_save1_data;
 reg  [31: 0] csr_save2_data;
 reg  [31: 0] csr_save3_data;
 
+wire [ 7: 0] hw_int_in;
+wire         ipi_int_in;
+reg  [31: 0] timer_cnt;
+
+assign hw_int_in = 8'b0;
+assign ipi_int_in= 1'b0;
+always @(posedge clk) begin
+    if (reset) begin
+        timer_cnt <= 32'hffffffff;
+    end
+    else begin
+        timer_cnt <= timer_cnt - 1'b1;
+    end
+end
 
 // CRMD
-always @(posedge clock) begin
+always @(posedge clk) begin
     if (reset)
         csr_crmd_plv <= 2'b0;
     else if (wb_ex)
@@ -76,7 +97,7 @@ always @(posedge clock) begin
                      | ~csr_wmask[`CSR_CRMD_PLV]&csr_crmd_plv;
  end
 
-always @(posedge clock) begin
+always @(posedge clk) begin
     if (reset)
         csr_crmd_ie <= 1'b0;
     else if (wb_ex)
@@ -96,7 +117,7 @@ assign csr_crmd_data = {23'b0, csr_crmd_datm, csr_crmd_datf, csr_crmd_pg,
                             csr_crmd_da, csr_crmd_ie, csr_crmd_plv};
 
 // PRMD
-always @(posedge clock) begin
+always @(posedge clk) begin
     if (wb_ex) begin
         csr_prmd_pplv <= csr_crmd_plv;
         csr_prmd_pie  <= csr_crmd_ie;
@@ -111,7 +132,7 @@ always @(posedge clock) begin
 assign csr_prmd_data  = {29'b0, csr_prmd_pie, csr_prmd_pplv};
 
 // ESTAT
-always @(posedge clock) begin
+always @(posedge clk) begin
     if (reset)
         csr_estat_is[1:0] <= 2'b0;
     else if (csr_we && csr_num==`CSR_ESTAT)
@@ -127,7 +148,7 @@ always @(posedge clock) begin
     csr_estat_is[12] <= ipi_int_in;
  end
 
-always @(posedge clock) begin
+always @(posedge clk) begin
     if (wb_ex) begin
         csr_estat_ecode    <= wb_ecode;
         csr_estat_esubcode <= wb_esubcode;
@@ -136,7 +157,7 @@ always @(posedge clock) begin
 assign csr_estat_data = { 1'b0, csr_estat_esubcode, csr_estat_ecode, 3'b0, csr_estat_is};
 
 // ERA
-always @(posedge clock) begin
+always @(posedge clk) begin
     if (wb_ex)
         csr_era_pc <= wb_pc;
     else if (csr_we && csr_num==`CSR_ERA)
@@ -145,7 +166,7 @@ always @(posedge clock) begin
 end
 
 // EENTRY
-always @(posedge clock) begin
+always @(posedge clk) begin
     if (csr_we && csr_num==`CSR_EENTRY)
         csr_eentry_va <= csr_wmask[`CSR_EENTRY_VA]&csr_wvalue[`CSR_EENTRY_VA]
                        | ~csr_wmask[`CSR_EENTRY_VA]&csr_eentry_va;
@@ -153,7 +174,7 @@ always @(posedge clock) begin
 assign csr_eentry_data= {csr_eentry_va, 6'b0};
 
 // SAVE0～3
-always @(posedge clock) begin
+always @(posedge clk) begin
     if (csr_we && csr_num==`CSR_SAVE0)
         csr_save0_data <= csr_wmask[`CSR_SAVE_DATA]&csr_wvalue[`CSR_SAVE_DATA]
                        | ~csr_wmask[`CSR_SAVE_DATA]&csr_save0_data;
@@ -167,5 +188,15 @@ always @(posedge clock) begin
         csr_save3_data <= csr_wmask[`CSR_SAVE_DATA]&csr_wvalue[`CSR_SAVE_DATA]
                        | ~csr_wmask[`CSR_SAVE_DATA]&csr_save3_data;
  end
+
+assign csr_rvalue =     {32{csr_num == `CSR_CRMD  }} & csr_crmd_data
+                      | {32{csr_num == `CSR_PRMD  }} & csr_prmd_data
+                      | {32{csr_num == `CSR_ESTAT }} & csr_estat_data
+                      | {32{csr_num == `CSR_ERA   }} & csr_era_pc
+                      | {32{csr_num == `CSR_EENTRY}} & csr_eentry_data
+                      | {32{csr_num == `CSR_SAVE0 }} & csr_save0_data
+                      | {32{csr_num == `CSR_SAVE1 }} & csr_save1_data
+                      | {32{csr_num == `CSR_SAVE2 }} & csr_save2_data
+                      | {32{csr_num == `CSR_SAVE3 }} & csr_save3_data;
 
 endmodule
