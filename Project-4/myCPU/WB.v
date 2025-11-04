@@ -2,7 +2,7 @@ module WB(
         input   wire            clk,
         input   wire            rst,
         input   wire [102:0]    MEM_to_WB_zip,
-        input   wire [ 81:0]    MEM_except_zip,
+        input   wire [ 96:0]    MEM_except_zip,
         
         output  wire            WB_allowin,
         output  wire            rf_wen,
@@ -17,7 +17,10 @@ module WB(
         output  wire            csr_we,
         output  wire [31:0]     csr_wmask,
         output  wire [31:0]     csr_wvalue,
-        output  wire            ertn_flush
+        output  wire            wb_ex,
+        output  wire            ertn_flush,
+        output  wire [ 5:0]     wb_ecode,
+        output  wire [ 8:0]     wb_esubcode
 );
 
 wire            valid;
@@ -33,7 +36,7 @@ assign {
     valid, pc, IR, gr_we, rf_waddr, rf_wdata
 } = MEM_to_WB_zip;
 
-assign {csr_re, csr_we, csr_wmask, csr_wvalue, csr_num, ertn_flush, inst_syscall} = MEM_except_zip;
+assign {csr_re, csr_we, csr_wmask, csr_wvalue, csr_num, ertn_flush, inst_syscall, wb_ecode, wb_esubcode} = MEM_except_zip;
 
 assign rf_wen   = gr_we & valid;
 assign rf_wdata_final = csr_re ? csr_rvalue : rf_wdata;

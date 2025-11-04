@@ -28,6 +28,9 @@ module MEM(
 );
 
 wire            valid;
+assign valid =  valid_self & ~flush;
+
+wire            valid_self;
 wire [31:0]     pc;
 wire [31:0]     IR;
 
@@ -83,7 +86,7 @@ end
 assign MEM_allowin = ~valid | (readygo & WB_allowin);
 
 assign  {
-        valid, pc, IR, 
+        valid_self, pc, IR, 
         inst_ld_b, inst_ld_bu, inst_ld_h, inst_ld_hu, inst_ld_w, 
         inst_st_b, inst_st_h, inst_st_w, 
         mem_we, res_from_mem, gr_we, rkd_value, rf_waddr, alu_result
