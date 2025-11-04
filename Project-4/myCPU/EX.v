@@ -3,7 +3,7 @@ module EX(
         input   wire            rst,
         input   wire            MEM_allowin,
         input   wire [195:0]    ID_to_EX_zip,
-        input   wire [ 81:0]    ID_except_zip,
+        input   wire [ 96:0]    ID_except_zip,
 
         input   wire            flush,
 
@@ -13,7 +13,7 @@ module EX(
 
         output  wire            EX_allowin,
         output  reg  [144:0]    EX_to_MEM_reg,
-        output  reg  [ 81:0]    EX_except_reg
+        output  reg  [ 96:0]    EX_except_reg
 );
 
 wire            valid;
@@ -70,7 +70,6 @@ assign {
         mem_we, res_from_mem, gr_we, rkd_value, rf_waddr
 } = EX_to_MEM_zip;
 
-assign {csr_re, csr_we, csr_wmask, csr_wvalue, csr_num, inst_ertn, inst_syscall} = ID_except_zip;
 
 wire [31:0]     alu_result;
 wire [31:0]     compute_result;
@@ -234,13 +233,13 @@ end
 
 always @(posedge clk) begin
         if (rst) begin
-                EX_except_reg <= 82'b0;
+                EX_except_reg <= 97'b0;
         end
         else if (readygo & MEM_allowin) begin
                 EX_except_reg <= ID_except_zip;
         end
         else if (~readygo & MEM_allowin) begin
-                EX_except_reg <= 82'b0;
+                EX_except_reg <= 97'b0;
         end
         else begin
                 EX_except_reg <= EX_except_reg;

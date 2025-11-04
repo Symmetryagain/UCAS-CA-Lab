@@ -1,3 +1,6 @@
+`define ECODE_SYS 6'd11
+`define ESUBCODE_NONE 9'd0
+
 module ID(
         input   wire            clk,
         input   wire            rst,
@@ -25,7 +28,7 @@ module ID(
         output  wire            ID_flush,
         output  wire [ 31:0]    ID_flush_target,
         output  reg  [195:0]    ID_to_EX_reg,
-        output  reg  [ 81:0]    ID_except_reg
+        output  reg  [ 96:0]    ID_except_reg
 );
 
 reg  [31:0]     last_pc;
@@ -178,6 +181,8 @@ wire [13:0]     csr_num;
 wire            csr_we;
 wire [31:0]     csr_wmask;
 wire [31:0]     csr_wvalue;
+wire  [5:0]     csr_ecode;
+wire  [8:0]     csr_esubcode;
 
 
 assign op_31_26 = inst[31:26];
@@ -362,12 +367,14 @@ assign csr_wmask    = {32{inst_csrxchg}} & rj_value | {32{inst_csrwr}};
 assign csr_wvalue   = rkd_value;
 assign csr_num      = inst[23:10];
 
+assign csr_ecode    = inst_syscall ? `ECODE_SYS : 6'd0;;
+assign csr_esubcode = inst_syscall ? `ESUBCODE_NONE : 9'd0;;
  
 
 always @(posedge clk) begin
         if (rst) begin
                 ID_to_EX_reg <= 196'b0;
-                ID_except_reg <= 82'b0;
+                ID_except_reg <= 97'b0;
         end
         else if (EX_allowin & readygo) begin
                 ID_to_EX_reg <= {
@@ -381,11 +388,11 @@ always @(posedge clk) begin
                         mem_we, res_from_mem, gr_we, rkd_value, dest,
                         inst_mul, inst_mulh, inst_mulhu, inst_div, inst_mod, inst_divu, inst_modu
                 };
-                ID_except_reg  <= {csr_re, csr_we, csr_wmask, csr_wvalue, csr_num, inst_ertn, inst_syscall};
+                ID_except_reg  <= {csr_re, csr_we, csr_wmask, csr_wvalue, csr_num, inst_ertn, inst_syscall, csr_ecode, csr_esubcode};
         end
         else if (EX_allowin & ~readygo) begin
                 ID_to_EX_reg <= 196'b0;
-                ID_except_reg <= 82'b0;
+                ID_except_reg <= 97'b0;
         end
         else begin
                 ID_to_EX_reg <= ID_to_EX_reg;

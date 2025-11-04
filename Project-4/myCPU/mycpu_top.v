@@ -86,8 +86,14 @@ wire            wb_ex;
 wire  [31:0]    wb_pc;
 wire  [ 5:0]    wb_ecode;
 wire  [ 8:0]    wb_esubcode;
+wire  [31:0]    csr_eentry_data;
 wire  [31:0]    csr_era_pc;
-wire  [31:0]    csr_era_pc;
+wire            flush;
+wire  [31:0]    flush_target;
+
+wire  [96:0]    ID_except_zip;
+wire  [96:0]    EX_except_zip;
+wire  [96:0]    MEM_except_zip;
 
 
 // IF instance
@@ -103,8 +109,8 @@ IF u_IF (
     .inst_ready     (inst_ready),
     .inst_valid     (inst_valid),
     .inst_sram_en   (inst_sram_en),
-    .flush          (),
-    .flush_target   ()
+    .flush          (flush),
+    .flush_target   (flush_target)
 );
 
 // ID instance
@@ -130,10 +136,9 @@ ID u_ID (
     .ID_allowin     (ID_allowin),
     .EX_allowin     (EX_allowin),
     .done_pc        (done_pc),
-    .flush          (),
-    .ID_except_reg  ()
+    .flush          (flush),
+    .ID_except_reg  (ID_except_zip)
 );
-
 // EX instance
 EX u_EX (
     .clk            (clk),
@@ -145,9 +150,9 @@ EX u_EX (
     .front_valid    (EX_front_valid),
     .front_addr     (EX_front_addr),
     .front_data     (EX_front_data),
-    .flush          (),
-    .ID_except_zip  (),
-    .EX_except_reg  ()
+    .flush          (flush),
+    .ID_except_zip  (ID_except_zip),
+    .EX_except_reg  (EX_except_zip)
 );
 
 // MEM instance (connect its memory read_data to data_sram_rdata, and drive data_sram_* outputs)
@@ -171,9 +176,9 @@ MEM u_MEM (
     .MEM_done       (MEM_done),
     .loaded_data    (loaded_data),
     .done_pc        (done_pc),
-    .flush          (),
-    .EX_except_zip  (),
-    .MEM_except_reg ()
+    .flush          (flush),
+    .EX_except_zip  (EX_except_zip),
+    .MEM_except_reg (MEM_except_zip)
 );
 
 // WB instance
@@ -186,14 +191,14 @@ WB u_WB (
     .rf_wdata_final (wb_rf_wdata),
     .inst_retire_reg(wb_inst_retire_reg),
     .WB_allowin     (WB_allowin),
-    .MEM_except_zip (),
-        .csr_re(),
-        .csr_num(),
-        .csr_rvalue(),
-        .csr_we(),
-        .csr_wmask(),
-        .csr_wvalue(),
-        .ertn_flush()
+    .MEM_except_zip (MEM_except_zip),
+    .csr_re         (csr_re),
+    .csr_num        (csr_num),
+    .csr_rvalue     (csr_rvalue),
+    .csr_we         (csr_we),
+    .csr_wmask      (csr_wmask),
+    .csr_wvalue     (csr_wvalue),
+    .ertn_flush     (ertn_flush)
 );
 
 // regfile instance
@@ -226,8 +231,11 @@ csr u_csr(
     .wb_ecode  (wb_ecode),
     .wb_esubcode(wb_esubcode),
     .csr_eentry_data(csr_eentry_data),
-    .csr_era_pc(csr_era_pc)
+    .csr_era_pc (csr_era_pc)
 );
+
+assign flush = ertn_flush | wb_ex;
+assign flush_target = ertn_flush ? csr_era_pc : csr_eentry_data;
 
 // tie-off instruction sram write controls (read-only from CPU)
 assign inst_sram_we    = 4'b0;
