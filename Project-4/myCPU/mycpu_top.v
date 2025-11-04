@@ -198,7 +198,11 @@ WB u_WB (
     .csr_we         (csr_we),
     .csr_wmask      (csr_wmask),
     .csr_wvalue     (csr_wvalue),
-    .ertn_flush     (ertn_flush)
+    .ertn_flush     (ertn_flush),
+    .wb_pc          (wb_pc),
+    .wb_ex          (wb_ex),
+    .wb_ecode       (wb_ecode),
+    .wb_esubcode    (wb_esubcode)
 );
 
 // regfile instance
