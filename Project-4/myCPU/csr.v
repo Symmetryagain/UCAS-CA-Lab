@@ -40,7 +40,9 @@ module csr(
         input  wire             wb_ex,  
         input  wire  [31:0]     wb_pc,
         input  wire  [ 5:0]     wb_ecode,  
-        input  wire  [ 8:0]     wb_esubcode
+        input  wire  [ 8:0]     wb_esubcode,
+        output wire  [31:0]     csr_eentry_data,
+        output reg   [31:0]     csr_era_pc
 );
 
 wire [31: 0] csr_crmd_data;
@@ -60,8 +62,8 @@ reg  [12: 0] csr_estat_is;
 reg  [ 5: 0] csr_estat_ecode;   
 reg  [ 8: 0] csr_estat_esubcode;
 
-reg  [31: 0] csr_era_pc;  
-wire [31: 0] csr_eentry_data;   
+// reg  [31: 0] csr_era_pc;  
+// wire [31: 0] csr_eentry_data;   
 reg  [25: 0] csr_eentry_va;  
 
 reg  [31: 0] csr_save0_data;

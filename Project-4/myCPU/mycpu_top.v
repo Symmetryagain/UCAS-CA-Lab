@@ -86,6 +86,9 @@ wire            wb_ex;
 wire  [31:0]    wb_pc;
 wire  [ 5:0]    wb_ecode;
 wire  [ 8:0]    wb_esubcode;
+wire  [31:0]    csr_era_pc;
+wire  [31:0]    csr_era_pc;
+
 
 // IF instance
 IF u_IF (
@@ -221,7 +224,9 @@ csr u_csr(
     .wb_ex     (wb_ex),
     .wb_pc     (wb_pc), 
     .wb_ecode  (wb_ecode),
-    .wb_esubcode(wb_esubcode)
+    .wb_esubcode(wb_esubcode),
+    .csr_eentry_data(csr_eentry_data),
+    .csr_era_pc(csr_era_pc)
 );
 
 // tie-off instruction sram write controls (read-only from CPU)
