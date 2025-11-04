@@ -3,6 +3,7 @@ module ID(
         input   wire            rst,
         input   wire            EX_allowin,
         input   wire [ 64:0]    IF_to_ID_zip,
+        input   wire            flush,
 
         input   wire            last_MEM_done,
         input   wire [ 31:0]    done_pc,
@@ -21,8 +22,8 @@ module ID(
         output  wire            ID_allowin,
         output  wire [  4:0]    rf_raddr1,
         output  wire [  4:0]    rf_raddr2,
-        output  wire            flush,
-        output  wire [ 31:0]    pc_real,
+        output  wire            ID_flush,
+        output  wire [ 31:0]    ID_flush_target,
         output  reg  [195:0]    ID_to_EX_reg,
         output  reg  [ 81:0]    ID_except_reg
 );
@@ -49,7 +50,7 @@ always @(posedge clk) begin
                 valid <= 1'b0;
         end
         else if (ID_allowin) begin
-                valid <= ~flush;
+                valid <= ~ID_flush;
         end
         else begin
                 valid <= valid;
@@ -353,7 +354,7 @@ assign  br_taken        = (   inst_beq  &&  rj_eq_rd
 assign  br_target       = (inst_beq || inst_bne || inst_bl || inst_b || inst_blt || inst_bge || inst_bltu || inst_bgeu) ? (pc + br_offs) :
                                                    /*inst_jirl*/ (rj_value + jirl_offs);
 
-assign  flush           = ((br_taken ^ predict) | inst_jirl) & ~rst & valid;
+assign  ID_flush           = ((br_taken ^ predict) | inst_jirl) & ~rst & valid;
 
 assign csr_re       = inst_csrrd | inst_csrwr | inst_csrxchg;
 assign csr_we       = inst_csrwr | inst_csrxchg;
@@ -416,6 +417,6 @@ always @(posedge clk) begin
         end
 end
 
-assign pc_real = {32{flush}} & br_target;
+assign ID_flush_target = br_target;
 
 endmodule

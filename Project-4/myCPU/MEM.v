@@ -7,7 +7,7 @@ module MEM(
         input   wire            data_valid,
         input   wire [ 31:0]    read_data,
         input   wire [144:0]    EX_to_MEM_zip,
-        input   wire [ 81:0]    EX_except_reg,
+        input   wire [ 81:0]    EX_except_zip,
 
         input   wire            flush,
 
@@ -152,7 +152,7 @@ always @(posedge clk) begin
                 MEM_except_reg <= 82'b0;
         end
         else if (readygo & WB_allowin) begin
-                MEM_except_reg <= EX_except_reg;
+                MEM_except_reg <= EX_except_zip;
         end
         else if (~readygo & WB_allowin) begin
                 MEM_except_reg <= 82'b0;

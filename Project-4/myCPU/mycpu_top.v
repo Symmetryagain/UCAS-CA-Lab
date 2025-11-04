@@ -91,15 +91,17 @@ wire  [ 8:0]    wb_esubcode;
 IF u_IF (
     .clk            (clk),
     .rst            (reset),
-    .flush          (ID_flush),
+    .ID_flush       (ID_flush),
     .inst           (inst_sram_rdata),
-    .pc_real        (ID_pc_real),
+    .ID_flush_target(ID_pc_real),
     .pc_next        (inst_sram_addr),
     .IF_to_ID_reg   (IF_to_ID_reg),
     .ID_allowin     (ID_allowin),
     .inst_ready     (inst_ready),
     .inst_valid     (inst_valid),
-    .inst_sram_en   (inst_sram_en)
+    .inst_sram_en   (inst_sram_en),
+    .flush          (),
+    .flush_target   ()
 );
 
 // ID instance
@@ -119,12 +121,14 @@ ID u_ID (
     .rf_rdata2      (rf_rdata2),
     .rf_raddr1      (rf_raddr1),
     .rf_raddr2      (rf_raddr2),
-    .flush          (ID_flush),
-    .pc_real        (ID_pc_real),
+    .ID_flush       (ID_flush),
+    .ID_flush_target(ID_pc_real),
     .ID_to_EX_reg   (ID_to_EX_reg),
     .ID_allowin     (ID_allowin),
     .EX_allowin     (EX_allowin),
-    .done_pc        (done_pc)
+    .done_pc        (done_pc),
+    .flush          (),
+    .ID_except_reg  ()
 );
 
 // EX instance
@@ -137,7 +141,10 @@ EX u_EX (
     .MEM_allowin    (MEM_allowin),
     .front_valid    (EX_front_valid),
     .front_addr     (EX_front_addr),
-    .front_data     (EX_front_data)
+    .front_data     (EX_front_data),
+    .flush          (),
+    .ID_except_zip  (),
+    .EX_except_reg  ()
 );
 
 // MEM instance (connect its memory read_data to data_sram_rdata, and drive data_sram_* outputs)
@@ -160,7 +167,10 @@ MEM u_MEM (
     .front_data     (MEM_front_data),
     .MEM_done       (MEM_done),
     .loaded_data    (loaded_data),
-    .done_pc        (done_pc)
+    .done_pc        (done_pc),
+    .flush          (),
+    .EX_except_zip  (),
+    .MEM_except_reg ()
 );
 
 // WB instance
@@ -172,7 +182,15 @@ WB u_WB (
     .rf_waddr       (wb_rf_waddr),
     .rf_wdata_final (wb_rf_wdata),
     .inst_retire_reg(wb_inst_retire_reg),
-    .WB_allowin     (WB_allowin)
+    .WB_allowin     (WB_allowin),
+    .MEM_except_zip (),
+        .csr_re(),
+        .csr_num(),
+        .csr_rvalue(),
+        .csr_we(),
+        .csr_wmask(),
+        .csr_wvalue(),
+        .ertn_flush()
 );
 
 // regfile instance
