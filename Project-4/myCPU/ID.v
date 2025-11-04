@@ -44,18 +44,20 @@ end
 reg             last_is_load;
 reg  [ 4:0]     last_dest;
 
-reg             valid;
+reg             valid_self;
 always @(posedge clk) begin
         if (rst) begin
-                valid <= 1'b0;
+                valid_self <= 1'b0;
         end
         else if (ID_allowin) begin
-                valid <= ~ID_flush;
+                valid_self <= ~ID_flush;
         end
         else begin
-                valid <= valid;
+                valid_self <= valid_self;
         end
 end
+wire            valid;
+assign valid = valid_self & ~flush;
 
 assign ID_allowin = ~valid | readygo & EX_allowin;
 
@@ -367,7 +369,6 @@ assign csr_num      = inst[23:10];
 always @(posedge clk) begin
         if (rst) begin
                 ID_to_EX_reg <= 196'b0;
-                ID_except_reg <= 82'b0;
         end
         else if (EX_allowin & readygo) begin
                 ID_to_EX_reg <= {
@@ -381,14 +382,26 @@ always @(posedge clk) begin
                         mem_we, res_from_mem, gr_we, rkd_value, dest,
                         inst_mul, inst_mulh, inst_mulhu, inst_div, inst_mod, inst_divu, inst_modu
                 };
-                ID_except_reg  <= {csr_re, csr_we, csr_wmask, csr_wvalue, csr_num, inst_ertn, inst_syscall};
         end
         else if (EX_allowin & ~readygo) begin
                 ID_to_EX_reg <= 196'b0;
-                ID_except_reg <= 82'b0;
         end
         else begin
                 ID_to_EX_reg <= ID_to_EX_reg;
+        end
+end
+
+always @(posedge clk) begin
+        if (rst) begin
+                ID_except_reg <= 82'b0;
+        end
+        else if (EX_allowin & readygo) begin
+                ID_except_reg  <= {csr_re, csr_we, csr_wmask, csr_wvalue, csr_num, inst_ertn, inst_syscall};
+        end
+        else if (EX_allowin & ~readygo) begin
+                ID_except_reg <= 82'b0;
+        end
+        else begin
                 ID_except_reg <= ID_except_reg;
         end
 end
