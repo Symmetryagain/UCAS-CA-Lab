@@ -23,7 +23,8 @@ module ID(
         output  wire [  4:0]    rf_raddr2,
         output  wire            flush,
         output  wire [ 31:0]    pc_real,
-        output  reg  [195:0]    ID_to_EX_reg
+        output  reg  [195:0]    ID_to_EX_reg,
+        output  reg  [ 81:0]    ID_except_reg
 );
 
 reg  [31:0]     last_pc;
@@ -157,6 +158,11 @@ wire            inst_ld_hu;
 wire            inst_st_b;
 wire            inst_st_h;
 
+wire            inst_csrrd;
+wire            inst_csrwr;
+wire            inst_csrxchg;
+wire            inst_ertn;
+
 wire            need_ui5;
 wire            need_ui12;
 wire            need_si12;
@@ -164,6 +170,12 @@ wire            need_si16;
 wire            need_si20;
 wire            need_si26;
 wire            src2_is_4;
+
+wire            csr_re;
+wire [13:0]     csr_num;
+wire            csr_we;
+wire [31:0]     csr_wmask;
+wire [31:0]     csr_wvalue;
 
 
 assign op_31_26 = inst[31:26];
@@ -237,6 +249,11 @@ assign  inst_st_w       = op_31_26_d[6'h0a] & op_25_22_d[4'h6];
 assign  inst_ld_bu      = op_31_26_d[6'h0a] & op_25_22_d[4'h8];
 assign  inst_ld_hu      = op_31_26_d[6'h0a] & op_25_22_d[4'h9];
 
+assign  inst_csrrd      = op_31_26_d[6'h01] & (op_25_22[3:2] == 2'b0) & (rj == 5'h00);
+assign  inst_csrwr      = op_31_26_d[6'h01] & (op_25_22[3:2] == 2'b0) & (rj == 5'h01);
+assign  inst_csrxchg    = op_31_26_d[6'h01] & (op_25_22[3:2] == 2'b0) & (rj != 5'h00) & (rj != 5'h01);
+assign  inst_ertn       = op_31_26_d[6'h01] & op_25_22_d[4'h9] & op_21_20_d[2'h0] & op_19_15_d[5'h10] & (rk == 5'h0e) & (rj == 5'h00) & (rd == 5'h00);
+
 assign  alu_op[ 0]      = inst_add_w | inst_addi_w | inst_ld_w | inst_st_w
                          | inst_ld_b | inst_ld_bu |inst_ld_h | inst_ld_hu | inst_st_b | inst_st_h
                          | inst_jirl | inst_bl | inst_pcaddu12i;
@@ -274,7 +291,7 @@ assign  br_offs         = need_si26 ? {{ 4{i26[25]}}, i26[25:0], 2'b0} :
 assign  jirl_offs       = {{14{i16[15]}}, i16[15:0], 2'b0};
 
 assign  src_reg_is_rd   = inst_beq | inst_bne | inst_st_w | inst_st_b | inst_st_h |
-                          inst_blt | inst_bge | inst_bltu | inst_bgeu;
+                          inst_blt | inst_bge | inst_bltu | inst_bgeu | inst_csrwr | inst_csrxchg;
 
 assign  src1_is_pc      = inst_jirl | inst_bl | inst_pcaddu12i;
 
@@ -337,9 +354,18 @@ assign  br_target       = (inst_beq || inst_bne || inst_bl || inst_b || inst_blt
 
 assign  flush           = ((br_taken ^ predict) | inst_jirl) & ~rst & valid;
 
+assign csr_re       = inst_csrrd | inst_csrwr | inst_csrxchg;
+assign csr_we       = inst_csrwr | inst_csrxchg;
+assign csr_wmask    = {32{inst_csrxchg}} & rj_value | {32{inst_csrwr}};
+assign csr_wvalue   = rkd_value;
+assign csr_num      = inst[23:10];
+
+ 
+
 always @(posedge clk) begin
         if (rst) begin
                 ID_to_EX_reg <= 196'b0;
+                ID_except_reg <= 82'b0;
         end
         else if (EX_allowin & readygo) begin
                 ID_to_EX_reg <= {
@@ -353,12 +379,15 @@ always @(posedge clk) begin
                         mem_we, res_from_mem, gr_we, rkd_value, dest,
                         inst_mul, inst_mulh, inst_mulhu, inst_div, inst_mod, inst_divu, inst_modu
                 };
+                ID_except_reg  <= {csr_re, csr_we, csr_wmask, csr_wvalue, csr_num, inst_ertn, inst_syscall};
         end
         else if (EX_allowin & ~readygo) begin
                 ID_to_EX_reg <= 196'b0;
+                ID_except_reg <= 82'b0;
         end
         else begin
                 ID_to_EX_reg <= ID_to_EX_reg;
+                ID_except_reg <= ID_except_reg;
         end
 end
 
