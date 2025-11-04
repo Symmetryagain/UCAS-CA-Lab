@@ -9,6 +9,8 @@ module MEM(
         input   wire [144:0]    EX_to_MEM_zip,
         input   wire [ 81:0]    EX_except_reg,
 
+        input   wire            flush,
+
         output  wire            front_valid,
         output  wire [  4:0]    front_addr,
         output  wire [ 31:0]    front_data,
@@ -133,18 +135,29 @@ assign write_data       = inst_st_b? {4{rkd_value[7:0]}}:
 always @(posedge clk) begin
         if (rst) begin
                 MEM_to_WB_reg <= 103'b0;
-                MEM_except_reg <= 82'b0;
         end
         else if (readygo & WB_allowin) begin
                 MEM_to_WB_reg <= {valid & ~rst, pc, IR, gr_we, rf_waddr, rf_wdata};
-                MEM_except_reg <= EX_except_reg;
         end
         else if (~readygo & WB_allowin) begin
                 MEM_to_WB_reg <= 103'b0;
-                MEM_except_reg <= 82'b0;
         end 
         else begin
                 MEM_to_WB_reg <= MEM_to_WB_reg;
+        end
+end
+
+always @(posedge clk) begin
+        if (rst) begin
+                MEM_except_reg <= 82'b0;
+        end
+        else if (readygo & WB_allowin) begin
+                MEM_except_reg <= EX_except_reg;
+        end
+        else if (~readygo & WB_allowin) begin
+                MEM_except_reg <= 82'b0;
+        end 
+        else begin
                 MEM_except_reg <= MEM_except_reg;
         end
 end

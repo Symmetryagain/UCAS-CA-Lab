@@ -170,7 +170,7 @@ WB u_WB (
     .MEM_to_WB_zip  (MEM_to_WB_reg),
     .rf_wen         (wb_rf_wen),
     .rf_waddr       (wb_rf_waddr),
-    .rf_wdata       (wb_rf_wdata),
+    .rf_wdata_final (wb_rf_wdata),
     .inst_retire_reg(wb_inst_retire_reg),
     .WB_allowin     (WB_allowin)
 );

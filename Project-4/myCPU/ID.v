@@ -4,6 +4,8 @@ module ID(
         input   wire            EX_allowin,
         input   wire [ 64:0]    IF_to_ID_zip,
 
+        input   wire            flush,
+
         input   wire            last_MEM_done,
         input   wire [ 31:0]    done_pc,
         input   wire [ 31:0]    last_load_data,
@@ -21,8 +23,10 @@ module ID(
         output  wire            ID_allowin,
         output  wire [  4:0]    rf_raddr1,
         output  wire [  4:0]    rf_raddr2,
-        output  wire            flush,
-        output  wire [ 31:0]    pc_real,
+
+        output  wire            ID_flush,
+        output  wire [ 31:0]    ID_flush_target,
+
         output  reg  [195:0]    ID_to_EX_reg,
         output  reg  [ 81:0]    ID_except_reg
 );
@@ -48,8 +52,14 @@ always @(posedge clk) begin
         if (rst) begin
                 valid <= 1'b0;
         end
+        else if (flush) begin
+                valid <= 1'b0;
+        end
+        else if (ID_flush) begin
+                valid <= 1'b0;
+        end
         else if (ID_allowin) begin
-                valid <= ~flush;
+                valid <= 1'b1;
         end
         else begin
                 valid <= valid;
@@ -162,6 +172,7 @@ wire            inst_csrrd;
 wire            inst_csrwr;
 wire            inst_csrxchg;
 wire            inst_ertn;
+wire            inst_syscall;
 
 wire            need_ui5;
 wire            need_ui12;
@@ -253,6 +264,7 @@ assign  inst_csrrd      = op_31_26_d[6'h01] & (op_25_22[3:2] == 2'b0) & (rj == 5
 assign  inst_csrwr      = op_31_26_d[6'h01] & (op_25_22[3:2] == 2'b0) & (rj == 5'h01);
 assign  inst_csrxchg    = op_31_26_d[6'h01] & (op_25_22[3:2] == 2'b0) & (rj != 5'h00) & (rj != 5'h01);
 assign  inst_ertn       = op_31_26_d[6'h01] & op_25_22_d[4'h9] & op_21_20_d[2'h0] & op_19_15_d[5'h10] & (rk == 5'h0e) & (rj == 5'h00) & (rd == 5'h00);
+assign  inst_syscall    = op_31_26_d[6'h00] & op_25_22_d[4'h0] & op_21_20_d[2'h2] & op_19_15_d[5'h16];
 
 assign  alu_op[ 0]      = inst_add_w | inst_addi_w | inst_ld_w | inst_st_w
                          | inst_ld_b | inst_ld_bu |inst_ld_h | inst_ld_hu | inst_st_b | inst_st_h
@@ -352,7 +364,7 @@ assign  br_taken        = (   inst_beq  &&  rj_eq_rd
 assign  br_target       = (inst_beq || inst_bne || inst_bl || inst_b || inst_blt || inst_bge || inst_bltu || inst_bgeu) ? (pc + br_offs) :
                                                    /*inst_jirl*/ (rj_value + jirl_offs);
 
-assign  flush           = ((br_taken ^ predict) | inst_jirl) & ~rst & valid;
+assign  ID_flush        = ((br_taken ^ predict) | inst_jirl) & ~rst & valid;
 
 assign csr_re       = inst_csrrd | inst_csrwr | inst_csrxchg;
 assign csr_we       = inst_csrwr | inst_csrxchg;
@@ -365,7 +377,6 @@ assign csr_num      = inst[23:10];
 always @(posedge clk) begin
         if (rst) begin
                 ID_to_EX_reg <= 196'b0;
-                ID_except_reg <= 82'b0;
         end
         else if (EX_allowin & readygo) begin
                 ID_to_EX_reg <= {
@@ -379,14 +390,26 @@ always @(posedge clk) begin
                         mem_we, res_from_mem, gr_we, rkd_value, dest,
                         inst_mul, inst_mulh, inst_mulhu, inst_div, inst_mod, inst_divu, inst_modu
                 };
-                ID_except_reg  <= {csr_re, csr_we, csr_wmask, csr_wvalue, csr_num, inst_ertn, inst_syscall};
         end
         else if (EX_allowin & ~readygo) begin
                 ID_to_EX_reg <= 196'b0;
-                ID_except_reg <= 82'b0;
         end
         else begin
                 ID_to_EX_reg <= ID_to_EX_reg;
+        end
+end
+
+always @(posedge clk) begin
+        if (rst) begin
+                ID_except_reg <= 82'b0;
+        end
+        else if (EX_allowin & readygo) begin
+                ID_except_reg  <= {csr_re, csr_we, csr_wmask, csr_wvalue, csr_num, inst_ertn, inst_syscall};
+        end
+        else if (EX_allowin & ~readygo) begin
+                ID_except_reg <= 82'b0;
+        end
+        else begin
                 ID_except_reg <= ID_except_reg;
         end
 end
@@ -415,6 +438,6 @@ always @(posedge clk) begin
         end
 end
 
-assign pc_real = {32{flush}} & br_target;
+assign ID_flush_target = br_target;
 
 endmodule
