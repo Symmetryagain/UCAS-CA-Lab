@@ -19,6 +19,7 @@ module WB(
         output  wire [31:0]     csr_wvalue,
         output  wire            wb_ex,
         output  wire            ertn_flush,
+        output  wire [31:0]     wb_pc,
         output  wire [ 5:0]     wb_ecode,
         output  wire [ 8:0]     wb_esubcode
 );
@@ -38,10 +39,13 @@ assign {
 
 assign {csr_re, csr_we, csr_wmask, csr_wvalue, csr_num, ertn_flush, inst_syscall, wb_ecode, wb_esubcode} = MEM_except_zip;
 
-assign rf_wen   = gr_we & valid;
+assign rf_wen   = gr_we & valid & ~wb_ex;
 assign rf_wdata_final = csr_re ? csr_rvalue : rf_wdata;
 always @(posedge clk) begin
         inst_retire_reg <= {pc, {4{rf_wen}}, rf_waddr, rf_wdata_final};
 end
+
+assign wb_ex = inst_syscall;
+assign wb_pc = pc;
 
 endmodule

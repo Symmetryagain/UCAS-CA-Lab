@@ -90,6 +90,9 @@ always @(posedge clk) begin
         if (rst) begin
                 IF_to_ID_reg <= {1'b0, 32'b0, `PC_INIT};
         end
+        // else if(flush)begin
+        //         IF_to_ID_reg <= {predict, ,pc};
+        // end
         else if (ID_allowin) begin
                 IF_to_ID_reg <= {predict, inst, pc};
         end else begin

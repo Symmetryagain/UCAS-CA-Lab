@@ -14,6 +14,9 @@ module MEM(
         output  wire            front_valid,
         output  wire [  4:0]    front_addr,
         output  wire [ 31:0]    front_data,
+        // output  wire            load_use_valid,
+        // output  wire [  4:0]    load_use_addr,
+        // output  wire [ 31:0]    load_use_data,
         output  wire            MEM_done,
         output  wire [ 31:0]    done_pc,
         output  wire [ 31:0]    loaded_data,
@@ -60,9 +63,10 @@ wire [3:0]      write_we_st_b;
 wire [3:0]      write_we_st_h;
 
 assign done_pc = pc;
-assign front_valid = ~res_from_mem & gr_we;
+assign front_valid = ~res_from_mem & gr_we | res_from_mem;
 assign front_addr = rf_waddr;
-assign front_data = alu_result;
+assign front_data = res_from_mem ? rf_wdata_LOAD : alu_result;
+
 assign MEM_done = readygo;
 assign loaded_data = rf_wdata_LOAD;
 

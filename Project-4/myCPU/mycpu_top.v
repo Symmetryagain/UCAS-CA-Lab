@@ -90,6 +90,9 @@ wire  [31:0]    csr_eentry_data;
 wire  [31:0]    csr_era_pc;
 wire            flush;
 wire  [31:0]    flush_target;
+// wire            load_use_valid;
+// wire  [ 4:0]    load_use_addr;
+// wire  [31:0]    load_use_data;
 
 wire  [96:0]    ID_except_zip;
 wire  [96:0]    EX_except_zip;
@@ -138,6 +141,9 @@ ID u_ID (
     .done_pc        (done_pc),
     .flush          (flush),
     .ID_except_reg  (ID_except_zip)
+    // .load_from_MEM_valid(load_from_MEM_valid),
+    // .load_from_MEM_addr(load_from_MEM_addr),
+    // .load_from_MEM_data(load_from_MEM_data)
 );
 // EX instance
 EX u_EX (
@@ -179,6 +185,9 @@ MEM u_MEM (
     .flush          (flush),
     .EX_except_zip  (EX_except_zip),
     .MEM_except_reg (MEM_except_zip)
+    // .load_use_valid (load_use_valid),
+    // .load_use_addr  (load_use_addr),
+    // .load_use_data  (load_use_data)
 );
 
 // WB instance
@@ -198,7 +207,11 @@ WB u_WB (
     .csr_we         (csr_we),
     .csr_wmask      (csr_wmask),
     .csr_wvalue     (csr_wvalue),
-    .ertn_flush     (ertn_flush)
+    .ertn_flush     (ertn_flush),
+    .wb_pc          (wb_pc),
+    .wb_ex          (wb_ex),
+    .wb_ecode       (wb_ecode),
+    .wb_esubcode    (wb_esubcode)
 );
 
 // regfile instance

@@ -18,6 +18,9 @@ module ID(
         input   wire            front_from_MEM_valid,
         input   wire [  4:0]    front_from_MEM_addr,
         input   wire [ 31:0]    front_from_MEM_data,
+        // input   wire            load_from_MEM_valid,
+        // input   wire [  4:0]    load_from_MEM_addr,
+        // input   wire [ 31:0]    load_from_MEM_data,
 
         input   wire [ 31:0]    rf_rdata1,
         input   wire [ 31:0]    rf_rdata2,
@@ -30,7 +33,35 @@ module ID(
         output  reg  [195:0]    ID_to_EX_reg,
         output  reg  [ 96:0]    ID_except_reg
 );
-
+reg [4:0] timer_cnt;
+reg       lllast;
+wire      is_csr;
+assign is_csr = inst_csrrd | inst_csrwr | inst_csrxchg | inst_syscall | inst_ertn;
+always @(posedge clk) begin
+    if (rst) begin
+        lllast <= 0;
+    end
+    else if (EX_allowin & readygo)  begin
+        lllast <= is_csr;
+    end
+    else begin
+        lllast <= lllast;
+    end
+end
+always @(posedge clk) begin
+    if (rst) begin
+        timer_cnt <= 5'b11111;
+    end
+    else if (EX_allowin & readygo & is_csr) begin
+        timer_cnt <= 5'b11111;
+    end
+    else if (lllast)  begin
+        timer_cnt <= {1'b0, timer_cnt[4:1]};
+    end
+    else begin
+        timer_cnt <= 5'b11111;
+    end
+end
 reg  [31:0]     last_pc;
 always @(posedge clk) begin
         if (rst) begin
@@ -52,6 +83,9 @@ always @(posedge clk) begin
         if (rst) begin
                 valid_self <= 1'b0;
         end
+        else if(flush)begin
+                valid_self <= 1'b0;
+        end
         else if (ID_allowin) begin
                 valid_self <= ~ID_flush;
         end
@@ -67,7 +101,8 @@ assign ID_allowin = ~valid | readygo & EX_allowin;
 wire            readygo;
 wire            need_pause;
 assign need_pause = (last_dest == rf_raddr1 || last_dest == rf_raddr2) & last_is_load & (last_dest != 0);
-assign readygo = ~need_pause | need_pause & last_MEM_done & (done_pc == last_pc);
+assign readygo = (~need_pause | need_pause & last_MEM_done & (done_pc == last_pc) ) &
+                ~(lllast & timer_cnt[0]);
 
 wire            predict;
 wire [31:0]     pc;
@@ -262,6 +297,7 @@ assign  inst_csrrd      = op_31_26_d[6'h01] & (op_25_22[3:2] == 2'b0) & (rj == 5
 assign  inst_csrwr      = op_31_26_d[6'h01] & (op_25_22[3:2] == 2'b0) & (rj == 5'h01);
 assign  inst_csrxchg    = op_31_26_d[6'h01] & (op_25_22[3:2] == 2'b0) & (rj != 5'h00) & (rj != 5'h01);
 assign  inst_ertn       = op_31_26_d[6'h01] & op_25_22_d[4'h9] & op_21_20_d[2'h0] & op_19_15_d[5'h10] & (rk == 5'h0e) & (rj == 5'h00) & (rd == 5'h00);
+assign  inst_syscall    = op_31_26_d[6'h00] & op_25_22_d[4'h0] & op_21_20_d[2'h2] & op_19_15_d[5'h16];
 
 assign  alu_op[ 0]      = inst_add_w | inst_addi_w | inst_ld_w | inst_st_w
                          | inst_ld_b | inst_ld_bu |inst_ld_h | inst_ld_hu | inst_st_b | inst_st_h
@@ -369,8 +405,8 @@ assign csr_wmask    = {32{inst_csrxchg}} & rj_value | {32{inst_csrwr}};
 assign csr_wvalue   = rkd_value;
 assign csr_num      = inst[23:10];
 
-assign csr_ecode    = inst_syscall ? `ECODE_SYS : 6'd0;;
-assign csr_esubcode = inst_syscall ? `ESUBCODE_NONE : 9'd0;;
+assign csr_ecode    = inst_syscall ? `ECODE_SYS : 6'd0;
+assign csr_esubcode = inst_syscall ? `ESUBCODE_NONE : 9'd0;
  
 
 always @(posedge clk) begin
