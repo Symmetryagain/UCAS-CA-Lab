@@ -240,7 +240,8 @@ csr u_csr(
 
     .ertn_flush(ertn_flush), 
     .wb_ex     (wb_ex),
-    .wb_pc     (wb_pc), 
+    .wb_pc     (wb_pc),
+    .wb_vaddr  (32'b0), 
     .wb_ecode  (wb_ecode),
     .wb_esubcode(wb_esubcode),
     .csr_eentry_data(csr_eentry_data),
