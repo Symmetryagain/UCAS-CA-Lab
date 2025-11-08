@@ -12,7 +12,7 @@
 `define CSR_SAVE3   14'h33
 `define CSR_TID     14'h40
 `define CSR_TCFG    14'h41
-`define CSR_TVAL   14'h42
+`define CSR_TVAL    14'h42
 `define CSR_TICLR   14'h44
 
 
@@ -76,8 +76,6 @@ wire [31: 0] csr_estat_data;
 reg  [12: 0] csr_estat_is;      
 reg  [ 5: 0] csr_estat_ecode;   
 reg  [ 8: 0] csr_estat_esubcode;
-
-  
 reg  [25: 0] csr_eentry_va;  
 
 reg  [31: 0] csr_save0_data;
@@ -93,19 +91,21 @@ reg          csr_tcfg_en;
 reg          csr_tcfg_periodic;
 reg  [29:0]  csr_tcfg_initval;
 wire [31:0]  tcfg_next_value;
-wire [31:0]  csr_tval;
 
-reg  [12:0]  csr_ecfg_lie;
-reg  [31:0]  csr_badv_vaddr;
-reg  [31:0]  csr_tid_tid;
 wire         wb_ex_addr_err;
-wire         csr_ticlr_clr;
+reg  [31:0]  csr_badv_vaddr;
+wire [31:0]  csr_tval;
+reg  [12:0]  csr_ecfg_lie;
 wire [31:0]  csr_ecfg_data;
+
+reg  [31:0]  csr_tid_tid;
 wire [31:0]  csr_tcfg_data;
+wire         csr_ticlr_clr;
 wire [31:0]  csr_ticlr_data;
 
 assign hw_int_in = 8'b0;
 assign ipi_int_in= 1'b0;
+
 always @(posedge clk) begin
     if (reset) begin
         timer_cnt <= 32'hffffffff;
@@ -262,6 +262,7 @@ always @(posedge clk) begin
     end
  end
 assign csr_tcfg_data = {csr_tcfg_initval, csr_tcfg_periodic, csr_tcfg_en};
+
 // TVAL
 assign tcfg_next_value =  csr_wmask[31:0]&csr_wvalue[31:0]
                        | ~csr_wmask[31:0]&{csr_tcfg_initval,
