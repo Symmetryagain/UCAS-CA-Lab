@@ -106,14 +106,14 @@ wire [31:0]  csr_ticlr_data;
 assign hw_int_in = 8'b0;
 assign ipi_int_in= 1'b0;
 
-always @(posedge clk) begin
-    if (reset) begin
-        timer_cnt <= 32'hffffffff;
-    end
-    else begin
-        timer_cnt <= timer_cnt - 1'b1;
-    end
-end
+// always @(posedge clk) begin
+//     if (reset) begin
+//         timer_cnt <= 32'hffffffff;
+//     end
+//     else begin
+//         timer_cnt <= timer_cnt - 1'b1;
+//     end
+// end
 
 // CRMD
 always @(posedge clk) begin
