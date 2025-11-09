@@ -1,11 +1,17 @@
-`define ECODE_SYS 6'd11
-`define ESUBCODE_NONE 9'd0
+//`define ECODE_INT       6'h00
+//`define ECODE_ADE       6'h08   
+//`define ECODE_ALE       6'h09   
+//`define ECODE_SYS       6'h0B
+//`define ECODE_BRK       6'h0C   
+//`define ECODE_INE       6'h0D
+//`define ECODE_TLBR      6'h3F
+//`define ESUBCODE_NONE   9'd0
 
 module ID(
         input   wire            clk,
         input   wire            rst,
         input   wire            EX_allowin,
-        input   wire [ 64:0]    IF_to_ID_zip,
+        input   wire [ 65:0]    IF_to_ID_zip,
         input   wire            flush,
 
         input   wire            last_MEM_done,
@@ -31,7 +37,7 @@ module ID(
         output  wire            ID_flush,
         output  wire [ 31:0]    ID_flush_target,
         output  reg  [195:0]    ID_to_EX_reg,
-        output  reg  [ 96:0]    ID_except_reg
+        output  reg  [ 85:0]    ID_except_reg
 );
 reg [4:0] timer_cnt;
 reg       lllast;
@@ -107,8 +113,9 @@ assign readygo = (~need_pause | need_pause & last_MEM_done & (done_pc == last_pc
 wire            predict;
 wire [31:0]     pc;
 wire [31:0]     inst;
+wire            except_adef;
 assign {
-        predict, inst, pc
+        predict, inst, pc, except_adef
 } = IF_to_ID_zip;
 
 wire [11:0]     alu_op;
@@ -204,6 +211,10 @@ wire            inst_csrwr;
 wire            inst_csrxchg;
 wire            inst_ertn;
 wire            inst_syscall;
+wire            inst_break;
+wire            inst_rdcntid;
+wire            inst_rdcntvl;
+wire            inst_rdcntvh;
 
 wire            need_ui5;
 wire            need_ui12;
@@ -253,14 +264,12 @@ assign  inst_slli_w     = op_31_26_d[6'h00] & op_25_22_d[4'h1] & op_21_20_d[2'h0
 assign  inst_srli_w     = op_31_26_d[6'h00] & op_25_22_d[4'h1] & op_21_20_d[2'h0] & op_19_15_d[5'h09];
 assign  inst_srai_w     = op_31_26_d[6'h00] & op_25_22_d[4'h1] & op_21_20_d[2'h0] & op_19_15_d[5'h11];
 assign  inst_addi_w     = op_31_26_d[6'h00] & op_25_22_d[4'ha];
-
 assign  inst_jirl       = op_31_26_d[6'h13];
 assign  inst_b          = op_31_26_d[6'h14];
 assign  inst_bl         = op_31_26_d[6'h15];
 assign  inst_beq        = op_31_26_d[6'h16];
 assign  inst_bne        = op_31_26_d[6'h17];
 assign  inst_lu12i_w    = op_31_26_d[6'h05] & ~inst[25];
-
 assign  inst_slti       = op_31_26_d[6'h00] & op_25_22_d[4'h8];
 assign  inst_sltui      = op_31_26_d[6'h00] & op_25_22_d[4'h9];
 assign  inst_andi       = op_31_26_d[6'h00] & op_25_22_d[4'hd];
@@ -270,7 +279,6 @@ assign  inst_sll        = op_31_26_d[6'h00] & op_25_22_d[4'h0] & op_21_20_d[2'h1
 assign  inst_srl        = op_31_26_d[6'h00] & op_25_22_d[4'h0] & op_21_20_d[2'h1] & op_19_15_d[5'h0f];
 assign  inst_sra        = op_31_26_d[6'h00] & op_25_22_d[4'h0] & op_21_20_d[2'h1] & op_19_15_d[5'h10];
 assign  inst_pcaddu12i  = op_31_26_d[6'h07] & ~inst[25];
-
 assign  inst_mul        = op_31_26_d[6'h00] & op_25_22_d[4'h0] & op_21_20_d[2'h1] & op_19_15_d[5'h18];
 assign  inst_mulh       = op_31_26_d[6'h00] & op_25_22_d[4'h0] & op_21_20_d[2'h1] & op_19_15_d[5'h19];
 assign  inst_mulhu      = op_31_26_d[6'h00] & op_25_22_d[4'h0] & op_21_20_d[2'h1] & op_19_15_d[5'h1a];
@@ -278,12 +286,10 @@ assign  inst_div        = op_31_26_d[6'h00] & op_25_22_d[4'h0] & op_21_20_d[2'h2
 assign  inst_mod        = op_31_26_d[6'h00] & op_25_22_d[4'h0] & op_21_20_d[2'h2] & op_19_15_d[5'h01];
 assign  inst_divu       = op_31_26_d[6'h00] & op_25_22_d[4'h0] & op_21_20_d[2'h2] & op_19_15_d[5'h02];
 assign  inst_modu       = op_31_26_d[6'h00] & op_25_22_d[4'h0] & op_21_20_d[2'h2] & op_19_15_d[5'h03];
-
 assign  inst_blt        = op_31_26_d[6'h18];
 assign  inst_bge        = op_31_26_d[6'h19];
 assign  inst_bltu       = op_31_26_d[6'h1a];
 assign  inst_bgeu       = op_31_26_d[6'h1b];
-
 assign  inst_ld_b       = op_31_26_d[6'h0a] & op_25_22_d[4'h0];
 assign  inst_ld_h       = op_31_26_d[6'h0a] & op_25_22_d[4'h1];
 assign  inst_ld_w       = op_31_26_d[6'h0a] & op_25_22_d[4'h2];
@@ -292,12 +298,15 @@ assign  inst_st_h       = op_31_26_d[6'h0a] & op_25_22_d[4'h5];
 assign  inst_st_w       = op_31_26_d[6'h0a] & op_25_22_d[4'h6];
 assign  inst_ld_bu      = op_31_26_d[6'h0a] & op_25_22_d[4'h8];
 assign  inst_ld_hu      = op_31_26_d[6'h0a] & op_25_22_d[4'h9];
-
 assign  inst_csrrd      = op_31_26_d[6'h01] & (op_25_22[3:2] == 2'b0) & (rj == 5'h00);
 assign  inst_csrwr      = op_31_26_d[6'h01] & (op_25_22[3:2] == 2'b0) & (rj == 5'h01);
 assign  inst_csrxchg    = op_31_26_d[6'h01] & (op_25_22[3:2] == 2'b0) & (rj != 5'h00) & (rj != 5'h01);
 assign  inst_ertn       = op_31_26_d[6'h01] & op_25_22_d[4'h9] & op_21_20_d[2'h0] & op_19_15_d[5'h10] & (rk == 5'h0e) & (rj == 5'h00) & (rd == 5'h00);
 assign  inst_syscall    = op_31_26_d[6'h00] & op_25_22_d[4'h0] & op_21_20_d[2'h2] & op_19_15_d[5'h16];
+assign  inst_break      = op_31_26_d[6'h00] & op_25_22_d[4'h0] & op_21_20_d[2'h2] & op_19_15_d[5'h14];
+assign  inst_rdcntid = op_31_26_d[6'h00] & op_25_22_d[4'h0] & op_21_20_d[2'h0] & op_19_15_d[5'h00] & (rk == 5'h18) & (rd == 5'h00);
+assign  inst_rdcntvl = op_31_26_d[6'h00] & op_25_22_d[4'h0] & op_21_20_d[2'h0] & op_19_15_d[5'h00] & (rk == 5'h18) & (rj == 5'h00);
+assign  inst_rdcntvh = op_31_26_d[6'h00] & op_25_22_d[4'h0] & op_21_20_d[2'h0] & op_19_15_d[5'h00] & (rk == 5'h19) & (rj == 5'h00);
 
 assign  alu_op[ 0]      = inst_add_w | inst_addi_w | inst_ld_w | inst_st_w
                          | inst_ld_b | inst_ld_bu |inst_ld_h | inst_ld_hu | inst_st_b | inst_st_h
@@ -404,10 +413,30 @@ assign csr_we       = inst_csrwr | inst_csrxchg;
 assign csr_wmask    = {32{inst_csrxchg}} & rj_value | {32{inst_csrwr}};
 assign csr_wvalue   = rkd_value;
 assign csr_num      = inst[23:10];
+wire   except_sys;
+wire   except_brk;
+wire   except_ine;
+wire   except_int;//TODO:中断逻辑来自csr
 
-assign csr_ecode    = inst_syscall ? `ECODE_SYS : 6'd0;
-assign csr_esubcode = inst_syscall ? `ESUBCODE_NONE : 9'd0;
- 
+/*assign csr_ecode    =  except_sys?  `ECODE_SYS:
+                       except_adef? `ECODE_ADE:
+                       except_ale?  `ECODE_ALE: 
+                       except_brk?  `ECODE_BRK:
+                       except_ine?  `ECODE_INE:
+                       except_int?  `ECODE_INT:
+                       6'b0;
+assign csr_esubcode = inst_syscall ? `ESUBCODE_NONE : 9'd0;*/
+
+assign except_sys  = inst_syscall;
+assign except_brk  = inst_break;
+assign except_ine  = ~(inst_add_w | inst_sub_w | inst_slt | inst_sltu | inst_nor | inst_and | inst_or | inst_xor |
+                inst_slli_w | inst_srli_w | inst_srai_w | inst_addi_w | inst_ld_w | inst_st_w | inst_jirl |
+                inst_b | inst_bl | inst_beq | inst_bne | inst_lu12i_w | inst_slti | inst_sltui | inst_andi |
+                inst_ori | inst_xori | inst_sll | inst_srl | inst_sra | inst_pcaddu12i | inst_mul | inst_mulh |
+                inst_mulhu | inst_div | inst_mod | inst_divu | inst_modu | inst_blt | inst_bge | inst_bltu |
+                inst_bgeu | inst_ld_b | inst_ld_h | inst_ld_bu | inst_ld_hu | inst_st_b | inst_st_h |
+                inst_csrrd | inst_csrwr | inst_csrxchg | inst_ertn | inst_syscall | inst_break | inst_rdcntid | inst_rdcntvl | inst_rdcntvh);
+assign except_int  = ;
 
 always @(posedge clk) begin
         if (rst) begin
@@ -436,17 +465,18 @@ end
 
 always @(posedge clk) begin
         if (rst) begin
-                ID_except_reg <= 97'b0;
+                ID_except_reg <= 86'b0;
         end
         else if (EX_allowin & readygo) begin
                 ID_except_reg  <= {
                         csr_re, csr_we, csr_wmask, csr_wvalue, csr_num, 
-                        inst_ertn, inst_syscall, 
-                        csr_ecode, csr_esubcode
+                        inst_ertn, except_sys, except_adef, except_brk, except_ine, except_int
+                        //csr_ecode, csr_esubcode
+
                 };
         end
         else if (EX_allowin & ~readygo) begin
-                ID_except_reg <= 97'b0;
+                ID_except_reg <= 86'b0;
         end
         else begin
                 ID_except_reg <= ID_except_reg;

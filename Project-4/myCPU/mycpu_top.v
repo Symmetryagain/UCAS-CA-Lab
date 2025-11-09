@@ -41,7 +41,7 @@ assign data_ready = 1'b1;
 assign data_valid = 1'b1;
 
 // internal pipeline zipes
-wire [64:0]  IF_to_ID_reg;
+wire [65:0]  IF_to_ID_reg;
 wire [195:0] ID_to_EX_reg;
 wire [144:0] EX_to_MEM_reg;
 wire [102:0] MEM_to_WB_reg;
@@ -94,9 +94,9 @@ wire  [31:0]    flush_target;
 // wire  [ 4:0]    load_use_addr;
 // wire  [31:0]    load_use_data;
 
-wire  [96:0]    ID_except_zip;
-wire  [96:0]    EX_except_zip;
-wire  [96:0]    MEM_except_zip;
+wire  [85:0]    ID_except_zip;
+wire  [86:0]    EX_except_zip;
+wire  [86:0]    MEM_except_zip;
 
 
 // IF instance

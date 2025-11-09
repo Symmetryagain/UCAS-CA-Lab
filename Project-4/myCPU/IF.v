@@ -16,12 +16,15 @@ module IF (
         
         output  wire            inst_sram_en,
         output  wire [31:0]     pc_next,
-        output  reg  [64:0]     IF_to_ID_reg
+        output  reg  [65:0]     IF_to_ID_reg
 );
 
 `define PC_INIT 32'h1bfffffc
 
 assign inst_sram_en = ~rst & ID_allowin;
+
+
+
 
 wire            predict;
 // wire            br_taken;
@@ -62,6 +65,10 @@ reg  [31:0]     IR;
 
 assign pc_next = flush ? flush_target: ID_flush ? ID_flush_target : pc + 4;
 
+wire except_adef;
+
+assign except_adef = (|pc[1:0]);
+
 always @(posedge clk) begin
         if (rst) begin
                 pc <= `PC_INIT;
@@ -88,13 +95,13 @@ end
 
 always @(posedge clk) begin
         if (rst) begin
-                IF_to_ID_reg <= {1'b0, 32'b0, `PC_INIT};
+                IF_to_ID_reg <= {1'b0, 32'b0, `PC_INIT, 1'b0};
         end
         // else if(flush)begin
         //         IF_to_ID_reg <= {predict, ,pc};
         // end
         else if (ID_allowin) begin
-                IF_to_ID_reg <= {predict, inst, pc};
+                IF_to_ID_reg <= {predict, inst, pc, except_adef};
         end else begin
                 IF_to_ID_reg <= IF_to_ID_reg;
         end
