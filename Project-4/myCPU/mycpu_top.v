@@ -90,6 +90,7 @@ wire  [31:0]    csr_eentry_data;
 wire  [31:0]    csr_era_pc;
 wire            flush;
 wire  [31:0]    flush_target;
+wire            has_int;
 // wire            load_use_valid;
 // wire  [ 4:0]    load_use_addr;
 // wire  [31:0]    load_use_data;
@@ -133,6 +134,7 @@ ID u_ID (
     .rf_rdata2      (rf_rdata2),
     .rf_raddr1      (rf_raddr1),
     .rf_raddr2      (rf_raddr2),
+    .has_int        (has_int),
     .ID_flush       (ID_flush),
     .ID_flush_target(ID_pc_real),
     .ID_to_EX_reg   (ID_to_EX_reg),
@@ -141,6 +143,7 @@ ID u_ID (
     .done_pc        (done_pc),
     .flush          (flush),
     .ID_except_reg  (ID_except_zip)
+    
     // .load_from_MEM_valid(load_from_MEM_valid),
     // .load_from_MEM_addr(load_from_MEM_addr),
     // .load_from_MEM_data(load_from_MEM_data)
@@ -238,6 +241,7 @@ csr u_csr(
     .csr_wmask (csr_wmask),
     .csr_wvalue(csr_wvalue),
 
+    .has_int   (has_int),
     .ertn_flush(ertn_flush), 
     .wb_ex     (wb_ex),
     .wb_pc     (wb_pc),

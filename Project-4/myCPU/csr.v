@@ -50,6 +50,7 @@ module csr(
         input   wire [31:0]     csr_wmask,
         input   wire [31:0]     csr_wvalue,
 
+        output wire             has_int,
         input  wire             ertn_flush,
         input  wire             wb_ex,  
         input  wire  [31:0]     wb_pc,
@@ -114,6 +115,8 @@ assign ipi_int_in= 1'b0;
 //         timer_cnt <= timer_cnt - 1'b1;
 //     end
 // end
+
+assign has_int  = ((csr_estat_is[12:0] & csr_ecfg_lie[12:0]) != 13'b0) && (csr_crmd_ie == 1'b1);
 
 // CRMD
 always @(posedge clk) begin

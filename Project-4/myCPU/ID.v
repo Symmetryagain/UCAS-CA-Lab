@@ -34,6 +34,7 @@ module ID(
         output  wire            ID_allowin,
         output  wire [  4:0]    rf_raddr1,
         output  wire [  4:0]    rf_raddr2,
+        input   wire            has_int,
         output  wire            ID_flush,
         output  wire [ 31:0]    ID_flush_target,
         output  reg  [195:0]    ID_to_EX_reg,
@@ -416,7 +417,7 @@ assign csr_num      = inst[23:10];
 wire   except_sys;
 wire   except_brk;
 wire   except_ine;
-wire   except_int;//TODO:中断逻辑来自csr
+wire   except_int;
 
 /*assign csr_ecode    =  except_sys?  `ECODE_SYS:
                        except_adef? `ECODE_ADE:
@@ -436,7 +437,7 @@ assign except_ine  = ~(inst_add_w | inst_sub_w | inst_slt | inst_sltu | inst_nor
                 inst_mulhu | inst_div | inst_mod | inst_divu | inst_modu | inst_blt | inst_bge | inst_bltu |
                 inst_bgeu | inst_ld_b | inst_ld_h | inst_ld_bu | inst_ld_hu | inst_st_b | inst_st_h |
                 inst_csrrd | inst_csrwr | inst_csrxchg | inst_ertn | inst_syscall | inst_break | inst_rdcntid | inst_rdcntvl | inst_rdcntvh);
-assign except_int  = ;
+assign except_int  = has_int;
 
 always @(posedge clk) begin
         if (rst) begin
