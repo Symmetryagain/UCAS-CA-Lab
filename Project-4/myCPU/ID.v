@@ -6,6 +6,7 @@
 //`define ECODE_INE       6'h0D
 //`define ECODE_TLBR      6'h3F
 //`define ESUBCODE_NONE   9'd0
+`include "macro.h"
 
 module ID(
         input   wire            clk,
@@ -37,7 +38,7 @@ module ID(
         input   wire            has_int,
         output  wire            ID_flush,
         output  wire [ 31:0]    ID_flush_target,
-        output  reg  [195:0]    ID_to_EX_reg,
+        output  reg  [197:0]    ID_to_EX_reg,
         output  reg  [ 85:0]    ID_except_reg
 );
 reg [4:0] timer_cnt;
@@ -305,9 +306,9 @@ assign  inst_csrxchg    = op_31_26_d[6'h01] & (op_25_22[3:2] == 2'b0) & (rj != 5
 assign  inst_ertn       = op_31_26_d[6'h01] & op_25_22_d[4'h9] & op_21_20_d[2'h0] & op_19_15_d[5'h10] & (rk == 5'h0e) & (rj == 5'h00) & (rd == 5'h00);
 assign  inst_syscall    = op_31_26_d[6'h00] & op_25_22_d[4'h0] & op_21_20_d[2'h2] & op_19_15_d[5'h16];
 assign  inst_break      = op_31_26_d[6'h00] & op_25_22_d[4'h0] & op_21_20_d[2'h2] & op_19_15_d[5'h14];
-assign  inst_rdcntid = op_31_26_d[6'h00] & op_25_22_d[4'h0] & op_21_20_d[2'h0] & op_19_15_d[5'h00] & (rk == 5'h18) & (rd == 5'h00);
-assign  inst_rdcntvl = op_31_26_d[6'h00] & op_25_22_d[4'h0] & op_21_20_d[2'h0] & op_19_15_d[5'h00] & (rk == 5'h18) & (rj == 5'h00);
-assign  inst_rdcntvh = op_31_26_d[6'h00] & op_25_22_d[4'h0] & op_21_20_d[2'h0] & op_19_15_d[5'h00] & (rk == 5'h19) & (rj == 5'h00);
+assign  inst_rdcntid    = op_31_26_d[6'h00] & op_25_22_d[4'h0] & op_21_20_d[2'h0] & op_19_15_d[5'h00] & (rk == 5'h18) & (rd == 5'h00);
+assign  inst_rdcntvl    = op_31_26_d[6'h00] & op_25_22_d[4'h0] & op_21_20_d[2'h0] & op_19_15_d[5'h00] & (rk == 5'h18) & (rj == 5'h00);
+assign  inst_rdcntvh    = op_31_26_d[6'h00] & op_25_22_d[4'h0] & op_21_20_d[2'h0] & op_19_15_d[5'h00] & (rk == 5'h19) & (rj == 5'h00);
 
 assign  alu_op[ 0]      = inst_add_w | inst_addi_w | inst_ld_w | inst_st_w
                          | inst_ld_b | inst_ld_bu |inst_ld_h | inst_ld_hu | inst_st_b | inst_st_h
@@ -377,7 +378,7 @@ assign  dst_is_r1       = inst_bl;
 assign  gr_we           = ~inst_st_w & ~inst_st_b & ~inst_st_h &
                           ~inst_beq & ~inst_bne & ~inst_b & ~inst_blt & ~inst_bge & ~inst_bltu & ~inst_bgeu;
 assign  mem_we          = inst_st_w | inst_st_b | inst_st_h;
-assign  dest            = dst_is_r1 ? 5'd1 : rd;
+assign  dest            = dst_is_r1 ? 5'd1 : inst_rdcntid ? rj : rd;
 
 assign  rf_raddr1       = rj;
 assign  rf_raddr2       = src_reg_is_rd ? rd : rk;
@@ -409,11 +410,11 @@ assign  br_target       = (inst_beq || inst_bne || inst_bl || inst_b || inst_blt
 
 assign  ID_flush           = ((br_taken ^ predict) | inst_jirl) & ~rst & valid;
 
-assign csr_re       = inst_csrrd | inst_csrwr | inst_csrxchg;
+assign csr_re       = inst_csrrd | inst_csrwr | inst_csrxchg | inst_rdcntid;
 assign csr_we       = inst_csrwr | inst_csrxchg;
 assign csr_wmask    = {32{inst_csrxchg}} & rj_value | {32{inst_csrwr}};
 assign csr_wvalue   = rkd_value;
-assign csr_num      = inst[23:10];
+assign csr_num      = inst_rdcntid ? `CSR_TID : inst[23:10];
 wire   except_sys;
 wire   except_brk;
 wire   except_ine;
@@ -441,7 +442,7 @@ assign except_int  = has_int;
 
 always @(posedge clk) begin
         if (rst) begin
-                ID_to_EX_reg <= 196'b0;
+                ID_to_EX_reg <= 198'b0;
         end
         else if (EX_allowin & readygo) begin
                 ID_to_EX_reg <= {
@@ -453,11 +454,12 @@ always @(posedge clk) begin
                         inst_ld_b, inst_ld_bu, inst_ld_h, inst_ld_hu, inst_ld_w, 
                         inst_st_b, inst_st_h, inst_st_w, 
                         mem_we, res_from_mem, gr_we, rkd_value, dest,
-                        inst_mul, inst_mulh, inst_mulhu, inst_div, inst_mod, inst_divu, inst_modu
+                        inst_mul, inst_mulh, inst_mulhu, inst_div, inst_mod, inst_divu, inst_modu, 
+                        inst_rdcntvh, inst_rdcntvl
                 };
         end
         else if (EX_allowin & ~readygo) begin
-                ID_to_EX_reg <= 196'b0;
+                ID_to_EX_reg <= 198'b0;
         end
         else begin
                 ID_to_EX_reg <= ID_to_EX_reg;
@@ -473,7 +475,6 @@ always @(posedge clk) begin
                         csr_re, csr_we, csr_wmask, csr_wvalue, csr_num, 
                         inst_ertn, except_sys, except_adef, except_brk, except_ine, except_int
                         //csr_ecode, csr_esubcode
-
                 };
         end
         else if (EX_allowin & ~readygo) begin

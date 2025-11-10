@@ -2,7 +2,7 @@ module EX(
         input   wire            clk,
         input   wire            rst,
         input   wire            MEM_allowin,
-        input   wire [195:0]    ID_to_EX_zip,
+        input   wire [197:0]    ID_to_EX_zip,
         input   wire [ 85:0]    ID_except_zip,
 
         input   wire            flush,
@@ -10,6 +10,8 @@ module EX(
         output  wire            front_valid,
         output  wire [  4:0]    front_addr,
         output  wire [ 31:0]    front_data,
+
+        input   wire [ 63:0]    counter,
 
         output  wire            EX_allowin,
         output  reg  [144:0]    EX_to_MEM_reg,
@@ -56,9 +58,11 @@ wire [31:0]     csr_wvalue;
 wire            inst_syscall;
 wire            inst_ertn;
 wire            except_ale;
+wire            inst_rdcntvh;
+wire            inst_rdcntvl;
 
 assign except_ale = (|alu_result[1:0]) & (inst_st_w | inst_ld_w) |
-     alu_result[0] & (inst_st_h | inst_ld_h | inst_ld_hu)
+     alu_result[0] & (inst_st_h | inst_ld_h | inst_ld_hu);
 
 assign front_valid = ~res_from_mem & gr_we;
 assign front_addr = rf_waddr;
@@ -68,7 +72,8 @@ assign EX_allowin = ~valid | readygo & MEM_allowin;
 
 assign  {
         valid_self, pc, IR, src1, src2, aluop, EX_to_MEM_zip, 
-        inst_mul, inst_mulh, inst_mulhu, inst_div, inst_mod, inst_divu, inst_modu
+        inst_mul, inst_mulh, inst_mulhu, inst_div, inst_mod, inst_divu, inst_modu, 
+        inst_rdcntvh, inst_rdcntvl
 } = ID_to_EX_zip;
 
 assign {
@@ -93,6 +98,8 @@ assign          compute_result  = inst_mul?                     prod[31:0]:
                                   inst_mod?                     div_result[31:0]:
                                   inst_divu?                    udiv_result[63:32]:
                                   inst_modu?                    udiv_result[31:0]:
+                                  inst_rdcntvh?                 counter[63:32]:
+                                  inst_rdcntvl?                 counter[31:0]:
                                   alu_result;
 
 wire            use_div;

@@ -1,11 +1,5 @@
-`define ECODE_INT       6'h00
-`define ECODE_ADE       6'h08   
-`define ECODE_ALE       6'h09   
-`define ECODE_SYS       6'h0B
-`define ECODE_BRK       6'h0C   
-`define ECODE_INE       6'h0D
-`define ECODE_TLBR      6'h3F
-`define ESUBCODE_NONE   9'd0
+`include "macro.h"
+
 module WB(
         input   wire            clk,
         input   wire            rst,
@@ -41,6 +35,9 @@ wire            except_ale;
 wire            except_brk;
 wire            except_ine;
 wire            except_int;
+wire            except_adef;
+wire [ 5:0]     csr_ecode;
+wire [ 8:0]     csr_esubcode;
 wire [31:0]     rf_wdata;
 
 assign WB_allowin = 1'b1;

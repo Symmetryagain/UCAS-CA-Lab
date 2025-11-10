@@ -23,17 +23,28 @@ module mycpu_top(
 reg             reset;
 always @(posedge clk) reset <= ~resetn;
 
+// counter 
+reg  [63:0]     counter;
+always @(posedge clk) begin
+    if (reset) begin
+        counter <= 64'b0;
+    end
+    else begin
+        counter <= counter + 64'b1;
+    end
+end
+
 // allowin
-wire         ID_allowin;
-wire         EX_allowin;
-wire         MEM_allowin;
-wire         WB_allowin;
+wire            ID_allowin;
+wire            EX_allowin;
+wire            MEM_allowin;
+wire            WB_allowin;
 
 // memory signal
-wire         inst_ready;
-wire         inst_valid;
-wire         data_ready;
-wire         data_valid;
+wire            inst_ready;
+wire            inst_valid;
+wire            data_ready;
+wire            data_valid;
 
 assign inst_ready = 1'b1;
 assign inst_valid = 1'b1;
@@ -41,38 +52,38 @@ assign data_ready = 1'b1;
 assign data_valid = 1'b1;
 
 // internal pipeline zipes
-wire [65:0]  IF_to_ID_reg;
-wire [195:0] ID_to_EX_reg;
-wire [144:0] EX_to_MEM_reg;
-wire [102:0] MEM_to_WB_reg;
+wire [65:0]     IF_to_ID_reg;
+wire [197:0]    ID_to_EX_reg;
+wire [144:0]    EX_to_MEM_reg;
+wire [102:0]    MEM_to_WB_reg;
 
 // IF <-> ID signals
-wire         ID_flush;
-wire [31:0]  ID_pc_real;
+wire            ID_flush;
+wire [31:0]     ID_pc_real;
 
 // regfile <-> ID / WB
-wire [4:0]   rf_raddr1;
-wire [4:0]   rf_raddr2;
-wire [31:0]  rf_rdata1;
-wire [31:0]  rf_rdata2;
+wire [4:0]      rf_raddr1;
+wire [4:0]      rf_raddr2;
+wire [31:0]     rf_rdata1;
+wire [31:0]     rf_rdata2;
 
-wire         wb_rf_wen;
-wire [4:0]   wb_rf_waddr;
-wire [31:0]  wb_rf_wdata;
+wire            wb_rf_wen;
+wire [4:0]      wb_rf_waddr;
+wire [31:0]     wb_rf_wdata;
 
 // WB inst_retire
-wire [72:0]  wb_inst_retire_reg;
+wire [72:0]     wb_inst_retire_reg;
 
-wire           EX_front_valid;
-wire [ 4:0]    EX_front_addr;
-wire [31:0]    EX_front_data;
-wire           MEM_front_valid;
-wire [ 4:0]    MEM_front_addr;
-wire [31:0]    MEM_front_data;
-wire           MEM_done;
-wire [31:0]    loaded_data;
+wire            EX_front_valid;
+wire [ 4:0]     EX_front_addr;
+wire [31:0]     EX_front_data;
+wire            MEM_front_valid;
+wire [ 4:0]     MEM_front_addr;
+wire [31:0]     MEM_front_data;
+wire            MEM_done;
+wire [31:0]     loaded_data;
 
-wire [31:0]    done_pc;
+wire [31:0]     done_pc;
 
 // csr signals
 wire            csr_re;
@@ -161,7 +172,8 @@ EX u_EX (
     .front_data     (EX_front_data),
     .flush          (flush),
     .ID_except_zip  (ID_except_zip),
-    .EX_except_reg  (EX_except_zip)
+    .EX_except_reg  (EX_except_zip),
+    .counter        (counter)
 );
 
 // MEM instance (connect its memory read_data to data_sram_rdata, and drive data_sram_* outputs)
