@@ -50,11 +50,6 @@ wire            res_from_mem;
 wire            gr_we;
 wire [31:0]     rkd_value;
 wire [ 4:0]     rf_waddr;
-wire            csr_re;
-wire [13:0]     csr_num;
-wire            csr_we;
-wire [31:0]     csr_wmask;
-wire [31:0]     csr_wvalue;
 wire            inst_syscall;
 wire            inst_ertn;
 wire            except_ale;
@@ -66,7 +61,7 @@ assign except_ale = (|alu_result[1:0]) & (inst_st_w | inst_ld_w) |
 
 assign front_valid = ~res_from_mem & gr_we;
 assign front_addr = rf_waddr;
-assign front_data = alu_result;
+assign front_data = compute_result;
 
 assign EX_allowin = ~valid | readygo & MEM_allowin;
 
@@ -177,19 +172,22 @@ always @(posedge clk) begin
         if (rst) begin
                 init <= 1'b1;
         end
-        else if (readygo & MEM_allowin) begin
+        else if (readygo & MEM_allowin & ~flush) begin
                 init <= 1'b1;
         end
-        else begin
+        else if (valid) begin
                 init <= 1'b0;
+        end
+        else begin
+                init <= init;
         end
 end
 
 always @(posedge clk) begin
-        if (rst) begin
+        if (rst | flush) begin
                 wait_src_ready <= 1'b0;
         end
-        else if (init & div_or_udiv) begin
+        else if (init & valid & div_or_udiv) begin
                 wait_src_ready <= 1'b1;
         end
         else if (wait_src_ready & src_ready) begin
@@ -201,7 +199,7 @@ always @(posedge clk) begin
 end
 
 always @(posedge clk) begin
-        if (rst) begin
+        if (rst | flush) begin
                 wait_res_valid <= 1'b0;
         end
         else if (wait_src_ready & src_ready) begin
@@ -219,7 +217,7 @@ always @(posedge clk) begin
         if (rst) begin
                 readygo <= 1'b0;
         end
-        else if (init & ~div_or_udiv | wait_res_valid & res_valid) begin
+        else if (init & valid & ~div_or_udiv | wait_res_valid & res_valid | flush) begin
                 readygo <= 1'b1;
         end
         else if (readygo & MEM_allowin) begin

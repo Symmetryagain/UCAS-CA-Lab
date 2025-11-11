@@ -1,0 +1,1347 @@
+From 55357ad59089edd3491ac7adac4905806ae98da5 Mon Sep 17 00:00:00 2001
+From: symmetree <symmetree@163.com>
+Date: Tue, 11 Nov 2025 17:17:48 +0800
+Subject: [PATCH] finished exp 13
+
+---
+ EX.v        |  64 ++++++++++---
+ ID.v        | 174 +++++++++++++++++++++++++++++-----
+ IF.v        |  33 +++++--
+ MEM.v       |  41 ++++++--
+ WB.v        |  53 ++++++++++-
+ csr.v       | 268 ++++++++++++++++++++++++++++++++++++++++++++++++++++
+ macro.h     |  47 +++++++++
+ mycpu_top.v | 183 +++++++++++++++++++++++++++--------
+ 8 files changed, 767 insertions(+), 96 deletions(-)
+ create mode 100644 csr.v
+ create mode 100644 macro.h
+
+diff --git a/EX.v b/EX.v
+index 7712ca1..e5bd573 100644
+--- a/EX.v
++++ b/EX.v
+@@ -2,15 +2,26 @@ module EX(
+         input   wire            clk,
+         input   wire            rst,
+         input   wire            MEM_allowin,
+-        input   wire [195:0]    ID_to_EX_zip,
++        input   wire [197:0]    ID_to_EX_zip,
++        input   wire [ 85:0]    ID_except_zip,
++
++        input   wire            flush,
++
+         output  wire            front_valid,
+         output  wire [  4:0]    front_addr,
+         output  wire [ 31:0]    front_data,
++
++        input   wire [ 63:0]    counter,
++
+         output  wire            EX_allowin,
+-        output  reg  [144:0]    EX_to_MEM_reg
++        output  reg  [144:0]    EX_to_MEM_reg,
++        output  reg  [ 86:0]    EX_except_reg
+ );
+ 
+ wire            valid;
++assign valid = valid_self & ~flush;
++
++wire            valid_self;
+ wire [31:0]     pc;
+ wire [31:0]     IR;
+ wire [31:0]     src1;
+@@ -39,16 +50,25 @@ wire            res_from_mem;
+ wire            gr_we;
+ wire [31:0]     rkd_value;
+ wire [ 4:0]     rf_waddr;
++wire            inst_syscall;
++wire            inst_ertn;
++wire            except_ale;
++wire            inst_rdcntvh;
++wire            inst_rdcntvl;
++
++assign except_ale = (|alu_result[1:0]) & (inst_st_w | inst_ld_w) |
++     alu_result[0] & (inst_st_h | inst_ld_h | inst_ld_hu);
+ 
+ assign front_valid = ~res_from_mem & gr_we;
+ assign front_addr = rf_waddr;
+-assign front_data = alu_result;
++assign front_data = compute_result;
+ 
+ assign EX_allowin = ~valid | readygo & MEM_allowin;
+ 
+ assign  {
+-        valid, pc, IR, src1, src2, aluop, EX_to_MEM_zip, 
+-        inst_mul, inst_mulh, inst_mulhu, inst_div, inst_mod, inst_divu, inst_modu
++        valid_self, pc, IR, src1, src2, aluop, EX_to_MEM_zip, 
++        inst_mul, inst_mulh, inst_mulhu, inst_div, inst_mod, inst_divu, inst_modu, 
++        inst_rdcntvh, inst_rdcntvl
+ } = ID_to_EX_zip;
+ 
+ assign {
+@@ -73,6 +93,8 @@ assign          compute_result  = inst_mul?                     prod[31:0]:
+                                   inst_mod?                     div_result[31:0]:
+                                   inst_divu?                    udiv_result[63:32]:
+                                   inst_modu?                    udiv_result[31:0]:
++                                  inst_rdcntvh?                 counter[63:32]:
++                                  inst_rdcntvl?                 counter[31:0]:
+                                   alu_result;
+ 
+ wire            use_div;
+@@ -122,7 +144,7 @@ alu u_alu(
+     .alu_result (alu_result)
+ );
+ 
+-mydiv signed_div (
++signed_div signed_div (
+     .aclk(clk),
+     .s_axis_divisor_tvalid(div_src_valid),
+     .s_axis_divisor_tready(div_src_1_ready),  
+@@ -150,19 +172,22 @@ always @(posedge clk) begin
+         if (rst) begin
+                 init <= 1'b1;
+         end
+-        else if (readygo & MEM_allowin) begin
++        else if (readygo & MEM_allowin & ~flush) begin
+                 init <= 1'b1;
+         end
+-        else begin
++        else if (valid) begin
+                 init <= 1'b0;
+         end
++        else begin
++                init <= init;
++        end
+ end
+ 
+ always @(posedge clk) begin
+-        if (rst) begin
++        if (rst | flush) begin
+                 wait_src_ready <= 1'b0;
+         end
+-        else if (init & div_or_udiv) begin
++        else if (init & valid & div_or_udiv) begin
+                 wait_src_ready <= 1'b1;
+         end
+         else if (wait_src_ready & src_ready) begin
+@@ -174,7 +199,7 @@ always @(posedge clk) begin
+ end
+ 
+ always @(posedge clk) begin
+-        if (rst) begin
++        if (rst | flush) begin
+                 wait_res_valid <= 1'b0;
+         end
+         else if (wait_src_ready & src_ready) begin
+@@ -192,7 +217,7 @@ always @(posedge clk) begin
+         if (rst) begin
+                 readygo <= 1'b0;
+         end
+-        else if (init & ~div_or_udiv | wait_res_valid & res_valid) begin
++        else if (init & valid & ~div_or_udiv | wait_res_valid & res_valid | flush) begin
+                 readygo <= 1'b1;
+         end
+         else if (readygo & MEM_allowin) begin
+@@ -218,4 +243,19 @@ always @(posedge clk) begin
+         end
+ end
+ 
++always @(posedge clk) begin
++        if (rst) begin
++                EX_except_reg <= 87'b0;
++        end
++        else if (readygo & MEM_allowin) begin
++                EX_except_reg <= {ID_except_zip, except_ale};
++        end
++        else if (~readygo & MEM_allowin) begin
++                EX_except_reg <= 87'b0;
++        end
++        else begin
++                EX_except_reg <= EX_except_reg;
++        end
++end
++
+ endmodule
+diff --git a/ID.v b/ID.v
+index 0ea4335..cb0ce54 100644
+--- a/ID.v
++++ b/ID.v
+@@ -1,8 +1,19 @@
++//`define ECODE_INT       6'h00
++//`define ECODE_ADE       6'h08   
++//`define ECODE_ALE       6'h09   
++//`define ECODE_SYS       6'h0B
++//`define ECODE_BRK       6'h0C   
++//`define ECODE_INE       6'h0D
++//`define ECODE_TLBR      6'h3F
++//`define ESUBCODE_NONE   9'd0
++`include "macro.h"
++
+ module ID(
+         input   wire            clk,
+         input   wire            rst,
+         input   wire            EX_allowin,
+-        input   wire [ 64:0]    IF_to_ID_zip,
++        input   wire [ 65:0]    IF_to_ID_zip,
++        input   wire            flush,
+ 
+         input   wire            last_MEM_done,
+         input   wire [ 31:0]    done_pc,
+@@ -14,18 +25,52 @@ module ID(
+         input   wire            front_from_MEM_valid,
+         input   wire [  4:0]    front_from_MEM_addr,
+         input   wire [ 31:0]    front_from_MEM_data,
++        // input   wire            load_from_MEM_valid,
++        // input   wire [  4:0]    load_from_MEM_addr,
++        // input   wire [ 31:0]    load_from_MEM_data,
+ 
+         input   wire [ 31:0]    rf_rdata1,
+         input   wire [ 31:0]    rf_rdata2,
+ 
++        input   wire            if_to_id_valid,
+         output  wire            ID_allowin,
+         output  wire [  4:0]    rf_raddr1,
+         output  wire [  4:0]    rf_raddr2,
+-        output  wire            flush,
+-        output  wire [ 31:0]    pc_real,
+-        output  reg  [195:0]    ID_to_EX_reg
++        input   wire            has_int,
++        output  wire            ID_flush,
++        output  wire [ 31:0]    ID_flush_target,
++        output  reg  [197:0]    ID_to_EX_reg,
++        output  reg  [ 85:0]    ID_except_reg
+ );
+-
++reg [4:0] timer_cnt;
++reg       lllast;
++wire      is_csr;
++assign is_csr = inst_csrrd | inst_csrwr | inst_csrxchg | inst_syscall | inst_ertn | inst_rdcntid;
++always @(posedge clk) begin
++    if (rst) begin
++        lllast <= 0;
++    end
++    else if (EX_allowin & readygo)  begin
++        lllast <= is_csr;
++    end
++    else begin
++        lllast <= lllast;
++    end
++end
++always @(posedge clk) begin
++    if (rst) begin
++        timer_cnt <= 5'b11111;
++    end
++    else if (EX_allowin & readygo & is_csr) begin
++        timer_cnt <= 5'b11111;
++    end
++    else if (lllast)  begin
++        timer_cnt <= {1'b0, timer_cnt[4:1]};
++    end
++    else begin
++        timer_cnt <= 5'b11111;
++    end
++end
+ reg  [31:0]     last_pc;
+ always @(posedge clk) begin
+         if (rst) begin
+@@ -42,31 +87,38 @@ end
+ reg             last_is_load;
+ reg  [ 4:0]     last_dest;
+ 
+-reg             valid;
++reg             valid_self;
+ always @(posedge clk) begin
+         if (rst) begin
+-                valid <= 1'b0;
++                valid_self <= 1'b0;
++        end
++        else if(flush)begin
++                valid_self <= 1'b0;
+         end
+         else if (ID_allowin) begin
+-                valid <= ~flush;
++                valid_self <= ~ID_flush & if_to_id_valid;
+         end
+         else begin
+-                valid <= valid;
++                valid_self <= valid_self;
+         end
+ end
++wire            valid;
++assign valid = valid_self & ~flush;
+ 
+ assign ID_allowin = ~valid | readygo & EX_allowin;
+ 
+ wire            readygo;
+ wire            need_pause;
+ assign need_pause = (last_dest == rf_raddr1 || last_dest == rf_raddr2) & last_is_load & (last_dest != 0);
+-assign readygo = ~need_pause | need_pause & last_MEM_done & (done_pc == last_pc);
++assign readygo = (~need_pause | need_pause & last_MEM_done & (done_pc == last_pc) ) &
++                ~(lllast & timer_cnt[0]);
+ 
+ wire            predict;
+ wire [31:0]     pc;
+ wire [31:0]     inst;
++wire            except_adef;
+ assign {
+-        predict, inst, pc
++        predict, inst, pc, except_adef
+ } = IF_to_ID_zip;
+ 
+ wire [11:0]     alu_op;
+@@ -157,6 +209,16 @@ wire            inst_ld_hu;
+ wire            inst_st_b;
+ wire            inst_st_h;
+ 
++wire            inst_csrrd;
++wire            inst_csrwr;
++wire            inst_csrxchg;
++wire            inst_ertn;
++wire            inst_syscall;
++wire            inst_break;
++wire            inst_rdcntid;
++wire            inst_rdcntvl;
++wire            inst_rdcntvh;
++
+ wire            need_ui5;
+ wire            need_ui12;
+ wire            need_si12;
+@@ -165,6 +227,14 @@ wire            need_si20;
+ wire            need_si26;
+ wire            src2_is_4;
+ 
++wire            csr_re;
++wire [13:0]     csr_num;
++wire            csr_we;
++wire [31:0]     csr_wmask;
++wire [31:0]     csr_wvalue;
++wire  [5:0]     csr_ecode;
++wire  [8:0]     csr_esubcode;
++
+ 
+ assign op_31_26 = inst[31:26];
+ assign op_25_22 = inst[25:22];
+@@ -197,14 +267,12 @@ assign  inst_slli_w     = op_31_26_d[6'h00] & op_25_22_d[4'h1] & op_21_20_d[2'h0
+ assign  inst_srli_w     = op_31_26_d[6'h00] & op_25_22_d[4'h1] & op_21_20_d[2'h0] & op_19_15_d[5'h09];
+ assign  inst_srai_w     = op_31_26_d[6'h00] & op_25_22_d[4'h1] & op_21_20_d[2'h0] & op_19_15_d[5'h11];
+ assign  inst_addi_w     = op_31_26_d[6'h00] & op_25_22_d[4'ha];
+-
+ assign  inst_jirl       = op_31_26_d[6'h13];
+ assign  inst_b          = op_31_26_d[6'h14];
+ assign  inst_bl         = op_31_26_d[6'h15];
+ assign  inst_beq        = op_31_26_d[6'h16];
+ assign  inst_bne        = op_31_26_d[6'h17];
+ assign  inst_lu12i_w    = op_31_26_d[6'h05] & ~inst[25];
+-
+ assign  inst_slti       = op_31_26_d[6'h00] & op_25_22_d[4'h8];
+ assign  inst_sltui      = op_31_26_d[6'h00] & op_25_22_d[4'h9];
+ assign  inst_andi       = op_31_26_d[6'h00] & op_25_22_d[4'hd];
+@@ -214,7 +282,6 @@ assign  inst_sll        = op_31_26_d[6'h00] & op_25_22_d[4'h0] & op_21_20_d[2'h1
+ assign  inst_srl        = op_31_26_d[6'h00] & op_25_22_d[4'h0] & op_21_20_d[2'h1] & op_19_15_d[5'h0f];
+ assign  inst_sra        = op_31_26_d[6'h00] & op_25_22_d[4'h0] & op_21_20_d[2'h1] & op_19_15_d[5'h10];
+ assign  inst_pcaddu12i  = op_31_26_d[6'h07] & ~inst[25];
+-
+ assign  inst_mul        = op_31_26_d[6'h00] & op_25_22_d[4'h0] & op_21_20_d[2'h1] & op_19_15_d[5'h18];
+ assign  inst_mulh       = op_31_26_d[6'h00] & op_25_22_d[4'h0] & op_21_20_d[2'h1] & op_19_15_d[5'h19];
+ assign  inst_mulhu      = op_31_26_d[6'h00] & op_25_22_d[4'h0] & op_21_20_d[2'h1] & op_19_15_d[5'h1a];
+@@ -222,12 +289,10 @@ assign  inst_div        = op_31_26_d[6'h00] & op_25_22_d[4'h0] & op_21_20_d[2'h2
+ assign  inst_mod        = op_31_26_d[6'h00] & op_25_22_d[4'h0] & op_21_20_d[2'h2] & op_19_15_d[5'h01];
+ assign  inst_divu       = op_31_26_d[6'h00] & op_25_22_d[4'h0] & op_21_20_d[2'h2] & op_19_15_d[5'h02];
+ assign  inst_modu       = op_31_26_d[6'h00] & op_25_22_d[4'h0] & op_21_20_d[2'h2] & op_19_15_d[5'h03];
+-
+ assign  inst_blt        = op_31_26_d[6'h18];
+ assign  inst_bge        = op_31_26_d[6'h19];
+ assign  inst_bltu       = op_31_26_d[6'h1a];
+ assign  inst_bgeu       = op_31_26_d[6'h1b];
+-
+ assign  inst_ld_b       = op_31_26_d[6'h0a] & op_25_22_d[4'h0];
+ assign  inst_ld_h       = op_31_26_d[6'h0a] & op_25_22_d[4'h1];
+ assign  inst_ld_w       = op_31_26_d[6'h0a] & op_25_22_d[4'h2];
+@@ -236,6 +301,15 @@ assign  inst_st_h       = op_31_26_d[6'h0a] & op_25_22_d[4'h5];
+ assign  inst_st_w       = op_31_26_d[6'h0a] & op_25_22_d[4'h6];
+ assign  inst_ld_bu      = op_31_26_d[6'h0a] & op_25_22_d[4'h8];
+ assign  inst_ld_hu      = op_31_26_d[6'h0a] & op_25_22_d[4'h9];
++assign  inst_csrrd      = op_31_26_d[6'h01] & (op_25_22[3:2] == 2'b0) & (rj == 5'h00);
++assign  inst_csrwr      = op_31_26_d[6'h01] & (op_25_22[3:2] == 2'b0) & (rj == 5'h01);
++assign  inst_csrxchg    = op_31_26_d[6'h01] & (op_25_22[3:2] == 2'b0) & (rj != 5'h00) & (rj != 5'h01);
++assign  inst_ertn       = op_31_26_d[6'h01] & op_25_22_d[4'h9] & op_21_20_d[2'h0] & op_19_15_d[5'h10] & (rk == 5'h0e) & (rj == 5'h00) & (rd == 5'h00);
++assign  inst_syscall    = op_31_26_d[6'h00] & op_25_22_d[4'h0] & op_21_20_d[2'h2] & op_19_15_d[5'h16];
++assign  inst_break      = op_31_26_d[6'h00] & op_25_22_d[4'h0] & op_21_20_d[2'h2] & op_19_15_d[5'h14];
++assign  inst_rdcntid    = op_31_26_d[6'h00] & op_25_22_d[4'h0] & op_21_20_d[2'h0] & op_19_15_d[5'h00] & (rk == 5'h18) & (rd == 5'h00);
++assign  inst_rdcntvl    = op_31_26_d[6'h00] & op_25_22_d[4'h0] & op_21_20_d[2'h0] & op_19_15_d[5'h00] & (rk == 5'h18) & (rj == 5'h00);
++assign  inst_rdcntvh    = op_31_26_d[6'h00] & op_25_22_d[4'h0] & op_21_20_d[2'h0] & op_19_15_d[5'h00] & (rk == 5'h19) & (rj == 5'h00);
+ 
+ assign  alu_op[ 0]      = inst_add_w | inst_addi_w | inst_ld_w | inst_st_w
+                          | inst_ld_b | inst_ld_bu |inst_ld_h | inst_ld_hu | inst_st_b | inst_st_h
+@@ -274,7 +348,7 @@ assign  br_offs         = need_si26 ? {{ 4{i26[25]}}, i26[25:0], 2'b0} :
+ assign  jirl_offs       = {{14{i16[15]}}, i16[15:0], 2'b0};
+ 
+ assign  src_reg_is_rd   = inst_beq | inst_bne | inst_st_w | inst_st_b | inst_st_h |
+-                          inst_blt | inst_bge | inst_bltu | inst_bgeu;
++                          inst_blt | inst_bge | inst_bltu | inst_bgeu | inst_csrwr | inst_csrxchg;
+ 
+ assign  src1_is_pc      = inst_jirl | inst_bl | inst_pcaddu12i;
+ 
+@@ -305,7 +379,7 @@ assign  dst_is_r1       = inst_bl;
+ assign  gr_we           = ~inst_st_w & ~inst_st_b & ~inst_st_h &
+                           ~inst_beq & ~inst_bne & ~inst_b & ~inst_blt & ~inst_bge & ~inst_bltu & ~inst_bgeu;
+ assign  mem_we          = inst_st_w | inst_st_b | inst_st_h;
+-assign  dest            = dst_is_r1 ? 5'd1 : rd;
++assign  dest            = dst_is_r1 ? 5'd1 : inst_rdcntid ? rj : rd;
+ 
+ assign  rf_raddr1       = rj;
+ assign  rf_raddr2       = src_reg_is_rd ? rd : rk;
+@@ -335,11 +409,41 @@ assign  br_taken        = (   inst_beq  &&  rj_eq_rd
+ assign  br_target       = (inst_beq || inst_bne || inst_bl || inst_b || inst_blt || inst_bge || inst_bltu || inst_bgeu) ? (pc + br_offs) :
+                                                    /*inst_jirl*/ (rj_value + jirl_offs);
+ 
+-assign  flush           = ((br_taken ^ predict) | inst_jirl) & ~rst & valid;
++assign  ID_flush           = ((br_taken ^ predict) | inst_jirl) & ~rst & valid;
++
++assign csr_re       = inst_csrrd | inst_csrwr | inst_csrxchg | inst_rdcntid;
++assign csr_we       = inst_csrwr | inst_csrxchg;
++assign csr_wmask    = {32{inst_csrxchg}} & rj_value | {32{inst_csrwr}};
++assign csr_wvalue   = rkd_value;
++assign csr_num      = inst_rdcntid ? `CSR_TID : inst[23:10];
++wire   except_sys;
++wire   except_brk;
++wire   except_ine;
++wire   except_int;
++
++/*assign csr_ecode    =  except_sys?  `ECODE_SYS:
++                       except_adef? `ECODE_ADE:
++                       except_ale?  `ECODE_ALE: 
++                       except_brk?  `ECODE_BRK:
++                       except_ine?  `ECODE_INE:
++                       except_int?  `ECODE_INT:
++                       6'b0;
++assign csr_esubcode = inst_syscall ? `ESUBCODE_NONE : 9'd0;*/
++
++assign except_sys  = inst_syscall;
++assign except_brk  = inst_break;
++assign except_ine  = ~(inst_add_w | inst_sub_w | inst_slt | inst_sltu | inst_nor | inst_and | inst_or | inst_xor |
++                inst_slli_w | inst_srli_w | inst_srai_w | inst_addi_w | inst_ld_w | inst_st_w | inst_jirl |
++                inst_b | inst_bl | inst_beq | inst_bne | inst_lu12i_w | inst_slti | inst_sltui | inst_andi |
++                inst_ori | inst_xori | inst_sll | inst_srl | inst_sra | inst_pcaddu12i | inst_mul | inst_mulh |
++                inst_mulhu | inst_div | inst_mod | inst_divu | inst_modu | inst_blt | inst_bge | inst_bltu |
++                inst_bgeu | inst_ld_b | inst_ld_h | inst_ld_bu | inst_ld_hu | inst_st_b | inst_st_h |
++                inst_csrrd | inst_csrwr | inst_csrxchg | inst_ertn | inst_syscall | inst_break | inst_rdcntid | inst_rdcntvl | inst_rdcntvh) & valid;
++assign except_int  = has_int;
+ 
+ always @(posedge clk) begin
+         if (rst) begin
+-                ID_to_EX_reg <= 196'b0;
++                ID_to_EX_reg <= 198'b0;
+         end
+         else if (EX_allowin & readygo) begin
+                 ID_to_EX_reg <= {
+@@ -351,23 +455,43 @@ always @(posedge clk) begin
+                         inst_ld_b, inst_ld_bu, inst_ld_h, inst_ld_hu, inst_ld_w, 
+                         inst_st_b, inst_st_h, inst_st_w, 
+                         mem_we, res_from_mem, gr_we, rkd_value, dest,
+-                        inst_mul, inst_mulh, inst_mulhu, inst_div, inst_mod, inst_divu, inst_modu
++                        inst_mul, inst_mulh, inst_mulhu, inst_div, inst_mod, inst_divu, inst_modu, 
++                        inst_rdcntvh, inst_rdcntvl
+                 };
+         end
+         else if (EX_allowin & ~readygo) begin
+-                ID_to_EX_reg <= 196'b0;
++                ID_to_EX_reg <= 198'b0;
+         end
+         else begin
+                 ID_to_EX_reg <= ID_to_EX_reg;
+         end
+ end
+ 
++always @(posedge clk) begin
++        if (rst) begin
++                ID_except_reg <= 86'b0;
++        end
++        else if (EX_allowin & readygo) begin
++                ID_except_reg  <= {
++                        csr_re, csr_we, csr_wmask, csr_wvalue, csr_num, 
++                        inst_ertn, except_sys, except_adef, except_brk, except_ine, except_int
++                        //csr_ecode, csr_esubcode
++                };
++        end
++        else if (EX_allowin & ~readygo) begin
++                ID_except_reg <= 86'b0;
++        end
++        else begin
++                ID_except_reg <= ID_except_reg;
++        end
++end
++
+ always @(posedge clk) begin
+         if (rst) begin
+                 last_is_load <= 1'b0;
+         end
+         else if (EX_allowin & readygo) begin
+-                last_is_load <= res_from_mem;
++                last_is_load <= res_from_mem & valid;
+         end
+         else begin
+                 last_is_load <= last_is_load;
+@@ -386,6 +510,6 @@ always @(posedge clk) begin
+         end
+ end
+ 
+-assign pc_real = {32{flush}} & br_target;
++assign ID_flush_target = br_target;
+ 
+-endmodule
++endmodule
+\ No newline at end of file
+diff --git a/IF.v b/IF.v
+index c29e94e..389c2fe 100644
+--- a/IF.v
++++ b/IF.v
+@@ -1,23 +1,37 @@
+ module IF (
+         input   wire            clk,
+         input   wire            rst,
+-        input   wire            flush,
+         input   wire            inst_ready,
+         input   wire            inst_valid,
+ 
+         input   wire            ID_allowin,
+ 
+         input   wire [31:0]     inst,
+-        input   wire [31:0]     pc_real,
++
++        input   wire            ID_flush,
++        input   wire [31:0]     ID_flush_target,
++
++        input   wire            flush,
++        input   wire [31:0]     flush_target,
++        
++        output  wire            if_to_id_valid,
+         output  wire            inst_sram_en,
+         output  wire [31:0]     pc_next,
+-        output  reg  [64:0]     IF_to_ID_reg
++        output  reg  [65:0]     IF_to_ID_reg
+ );
+ 
+ `define PC_INIT 32'h1bfffffc
+ 
+ assign inst_sram_en = ~rst & ID_allowin;
+ 
++reg             valid;
++always @(posedge clk) begin
++    valid <= ~rst;
++end
++
++assign if_to_id_valid = valid & ~flush;
++
++
+ wire            predict;
+ // wire            br_taken;
+ // wire [31:0]     br_target;
+@@ -55,7 +69,11 @@ assign predict          = 1'b0;
+ reg  [31:0]     pc;
+ reg  [31:0]     IR;
+ 
+-assign pc_next = flush ? pc_real : pc + 4;
++assign pc_next = flush ? flush_target: ID_flush ? ID_flush_target : pc + 4;
++
++wire except_adef;
++
++assign except_adef = (|pc[1:0]);
+ 
+ always @(posedge clk) begin
+         if (rst) begin
+@@ -83,10 +101,13 @@ end
+ 
+ always @(posedge clk) begin
+         if (rst) begin
+-                IF_to_ID_reg <= {1'b0, 32'b0, `PC_INIT};
++                IF_to_ID_reg <= {1'b0, 32'b0, `PC_INIT, 1'b0};
+         end
++        // else if(flush)begin
++        //         IF_to_ID_reg <= {predict, ,pc};
++        // end
+         else if (ID_allowin) begin
+-                IF_to_ID_reg <= {predict, inst, pc};
++                IF_to_ID_reg <= {predict, inst, pc, except_adef};
+         end else begin
+                 IF_to_ID_reg <= IF_to_ID_reg;
+         end
+diff --git a/MEM.v b/MEM.v
+index 86a71a0..6e30789 100644
+--- a/MEM.v
++++ b/MEM.v
+@@ -7,10 +7,16 @@ module MEM(
+         input   wire            data_valid,
+         input   wire [ 31:0]    read_data,
+         input   wire [144:0]    EX_to_MEM_zip,
++        input   wire [ 86:0]    EX_except_zip,
++
++        input   wire            flush,
+ 
+         output  wire            front_valid,
+         output  wire [  4:0]    front_addr,
+         output  wire [ 31:0]    front_data,
++        // output  wire            load_use_valid,
++        // output  wire [  4:0]    load_use_addr,
++        // output  wire [ 31:0]    load_use_data,
+         output  wire            MEM_done,
+         output  wire [ 31:0]    done_pc,
+         output  wire [ 31:0]    loaded_data,
+@@ -20,10 +26,14 @@ module MEM(
+         output  wire [  3:0]    write_we,
+         output  wire [ 31:0]    write_addr,
+         output  wire [ 31:0]    write_data,
+-        output  reg  [102:0]    MEM_to_WB_reg
++        output  reg  [102:0]    MEM_to_WB_reg,
++        output  reg  [118:0]    MEM_except_reg
+ );
+ 
+ wire            valid;
++assign valid =  valid_self & ~flush;
++
++wire            valid_self;
+ wire [31:0]     pc;
+ wire [31:0]     IR;
+ 
+@@ -52,10 +62,14 @@ wire [31:0]     rf_wdata_ld_hu;
+ wire [3:0]      write_we_st_b;
+ wire [3:0]      write_we_st_h;
+ 
++wire            except_ale;
++assign except_ale = EX_except_zip[0];
++
+ assign done_pc = pc;
+-assign front_valid = ~res_from_mem & gr_we;
++assign front_valid = ~res_from_mem & gr_we | res_from_mem;
+ assign front_addr = rf_waddr;
+-assign front_data = alu_result;
++assign front_data = res_from_mem ? rf_wdata_LOAD : alu_result;
++
+ assign MEM_done = readygo;
+ assign loaded_data = rf_wdata_LOAD;
+ 
+@@ -79,7 +93,7 @@ end
+ assign MEM_allowin = ~valid | (readygo & WB_allowin);
+ 
+ assign  {
+-        valid, pc, IR, 
++        valid_self, pc, IR, 
+         inst_ld_b, inst_ld_bu, inst_ld_h, inst_ld_hu, inst_ld_w, 
+         inst_st_b, inst_st_h, inst_st_w, 
+         mem_we, res_from_mem, gr_we, rkd_value, rf_waddr, alu_result
+@@ -109,7 +123,7 @@ assign rf_wdata_LOAD    = inst_ld_b?  rf_wdata_ld_b :
+ 
+ assign rf_wdata         = res_from_mem ? rf_wdata_LOAD : alu_result;
+ 
+-assign write_en         = (mem_we | res_from_mem) & valid;
++assign write_en         = (mem_we | res_from_mem) & valid & ~except_ale;
+ 
+ assign write_we_st_b    = (write_addr[1:0]==2'b00)? 4'b0001:
+                           (write_addr[1:0]==2'b01)? 4'b0010:
+@@ -117,7 +131,7 @@ assign write_we_st_b    = (write_addr[1:0]==2'b00)? 4'b0001:
+                           4'b1000;
+ assign write_we_st_h    = (write_addr[1:0]==2'b00)? 4'b0011:
+                           4'b1100;                          
+-assign write_we         = {4{valid}} & 
++assign write_we         = {4{valid & ~except_ale}} & 
+                           (inst_st_b? {write_we_st_b}:
+                           inst_st_h? write_we_st_h:
+                           inst_st_w? 4'b1111:
+@@ -143,4 +157,19 @@ always @(posedge clk) begin
+         end
+ end
+ 
++always @(posedge clk) begin
++        if (rst) begin
++                MEM_except_reg <= 87'b0;
++        end
++        else if (readygo & WB_allowin) begin
++                MEM_except_reg <= {EX_except_zip, write_addr};
++        end
++        else if (~readygo & WB_allowin) begin
++                MEM_except_reg <= 87'b0;
++        end 
++        else begin
++                MEM_except_reg <= MEM_except_reg;
++        end
++end
++
+ endmodule
+diff --git a/WB.v b/WB.v
+index b2fda1a..3e0895a 100644
+--- a/WB.v
++++ b/WB.v
+@@ -1,19 +1,43 @@
++`include "macro.h"
++
+ module WB(
+         input   wire            clk,
+         input   wire            rst,
+         input   wire [102:0]    MEM_to_WB_zip,
++        input   wire [118:0]    MEM_except_zip,
+         
+         output  wire            WB_allowin,
+         output  wire            rf_wen,
+         output  wire [  4:0]    rf_waddr,
+-        output  wire [ 31:0]    rf_wdata,
+-        output  reg  [ 72:0]    inst_retire_reg
++        output  wire [ 31:0]    rf_wdata_final,
++        output  reg  [ 72:0]    inst_retire_reg,
++
++
++        output  wire            csr_re,
++        output  wire [13:0]     csr_num,
++        input   wire [31:0]     csr_rvalue,
++        output  wire            csr_we,
++        output  wire [31:0]     csr_wmask,
++        output  wire [31:0]     csr_wvalue,
++        output  wire            wb_ex,
++        output  wire            ertn_flush,
++        output  wire [31:0]     wb_pc,
++        output  wire [ 5:0]     wb_ecode,
++        output  wire [ 8:0]     wb_esubcode,
++        output  wire [31:0]     wb_vaddr
+ );
+ 
+ wire            valid;
+ wire [31:0]     pc;
+ wire [31:0]     IR;
+ wire            gr_we;
++wire            except_sys;
++wire            except_ale;
++wire            except_brk;
++wire            except_ine;
++wire            except_int;
++wire            except_adef;
++wire [31:0]     rf_wdata;
+ 
+ assign WB_allowin = 1'b1;
+ 
+@@ -21,10 +45,29 @@ assign {
+     valid, pc, IR, gr_we, rf_waddr, rf_wdata
+ } = MEM_to_WB_zip;
+ 
+-assign rf_wen   = gr_we & valid;
++assign {
++        csr_re, csr_we, csr_wmask, csr_wvalue, csr_num, 
++        ertn_flush, except_sys, except_adef, except_brk, except_ine, except_int, except_ale,
++        wb_vaddr
++} = MEM_except_zip;
+ 
++assign rf_wen   = gr_we & valid & ~wb_ex;
++assign rf_wdata_final = csr_re ? csr_rvalue : rf_wdata;
+ always @(posedge clk) begin
+-        inst_retire_reg <= {pc, {4{rf_wen}}, rf_waddr, rf_wdata};
++        inst_retire_reg <= {pc, {4{rf_wen}}, rf_waddr, rf_wdata_final};
+ end
+ 
+-endmodule
+\ No newline at end of file
++assign wb_ex = except_sys | except_adef | except_brk | except_ine | except_int | except_ale;
++assign wb_pc = pc;
++
++assign wb_ecode    =  except_sys?  `ECODE_SYS:
++                       except_adef? `ECODE_ADE:
++                       except_ale?  `ECODE_ALE: 
++                       except_brk?  `ECODE_BRK:
++                       except_ine?  `ECODE_INE:
++                       except_int?  `ECODE_INT:
++                       6'b0;
++assign wb_esubcode = //inst_syscall ? `ESUBCODE_NONE : 
++                        9'd0;
++
++endmodule
+diff --git a/csr.v b/csr.v
+new file mode 100644
+index 0000000..c302c06
+--- /dev/null
++++ b/csr.v
+@@ -0,0 +1,268 @@
++`include "macro.h"
++
++module csr(
++        input   wire            clk,
++        input   wire            reset,
++        input   wire            csr_re,
++        input   wire [13:0]     csr_num,
++        output  wire [31:0]     csr_rvalue,
++        input   wire            csr_we,
++        input   wire [31:0]     csr_wmask,
++        input   wire [31:0]     csr_wvalue,
++
++        output wire             has_int,
++        input  wire             ertn_flush,
++        input  wire             wb_ex,  
++        input  wire  [31:0]     wb_pc,
++        input  wire  [31:0]     wb_vaddr,
++        input  wire  [ 5:0]     wb_ecode,  
++        input  wire  [ 8:0]     wb_esubcode,
++        output wire  [31:0]     csr_eentry_data,
++        output reg   [31:0]     csr_era_pc
++);
++
++wire [31: 0] csr_crmd_data;
++reg  [ 1: 0] csr_crmd_plv;      
++reg          csr_crmd_ie;       
++wire         csr_crmd_da;       
++wire         csr_crmd_pg;
++wire [ 6: 5] csr_crmd_datf;
++wire [ 8: 7] csr_crmd_datm;
++
++wire [31: 0] csr_prmd_data;
++reg  [ 1: 0] csr_prmd_pplv;     
++reg          csr_prmd_pie; 
++
++wire [31: 0] csr_estat_data;    
++reg  [12: 0] csr_estat_is;      
++reg  [ 5: 0] csr_estat_ecode;   
++reg  [ 8: 0] csr_estat_esubcode;
++reg  [25: 0] csr_eentry_va;  
++
++reg  [31: 0] csr_save0_data;
++reg  [31: 0] csr_save1_data;
++reg  [31: 0] csr_save2_data;
++reg  [31: 0] csr_save3_data;
++
++wire [ 7: 0] hw_int_in;
++wire         ipi_int_in;
++reg  [31: 0] timer_cnt;
++
++reg          csr_tcfg_en;
++reg          csr_tcfg_periodic;
++reg  [29:0]  csr_tcfg_initval;
++wire [31:0]  tcfg_next_value;
++
++wire         wb_ex_addr_err;
++reg  [31:0]  csr_badv_vaddr;
++wire [31:0]  csr_tval;
++reg  [12:0]  csr_ecfg_lie;
++wire [31:0]  csr_ecfg_data;
++
++reg  [31:0]  csr_tid_tid;
++wire [31:0]  csr_tcfg_data;
++wire         csr_ticlr_clr;
++wire [31:0]  csr_ticlr_data;
++
++assign hw_int_in = 8'b0;
++assign ipi_int_in= 1'b0;
++
++// always @(posedge clk) begin
++//     if (reset) begin
++//         timer_cnt <= 32'hffffffff;
++//     end
++//     else begin
++//         timer_cnt <= timer_cnt - 1'b1;
++//     end
++// end
++
++assign has_int  = ((csr_estat_is[12:0] & csr_ecfg_lie[12:0]) != 13'b0) && (csr_crmd_ie == 1'b1);
++
++// CRMD
++always @(posedge clk) begin
++    if (reset)
++        csr_crmd_plv <= 2'b0;
++    else if (wb_ex)
++        csr_crmd_plv <= 2'b0;
++    else if (ertn_flush)
++        csr_crmd_plv <= csr_prmd_pplv;
++    else if (csr_we && csr_num==`CSR_CRMD)
++        csr_crmd_plv <= csr_wmask[`CSR_CRMD_PLV]&csr_wvalue[`CSR_CRMD_PLV]
++                     | ~csr_wmask[`CSR_CRMD_PLV]&csr_crmd_plv;
++ end
++
++always @(posedge clk) begin
++    if (reset)
++        csr_crmd_ie <= 1'b0;
++    else if (wb_ex)
++        csr_crmd_ie <= 1'b0;
++    else if (ertn_flush)
++        csr_crmd_ie <= csr_prmd_pie;
++    else if (csr_we && csr_num==`CSR_CRMD)
++        csr_crmd_ie <= csr_wmask[`CSR_CRMD_PIE]&csr_wvalue[`CSR_CRMD_PIE]
++                    | ~csr_wmask[`CSR_CRMD_PIE]&csr_crmd_ie;
++ end
++
++assign csr_crmd_da   = 1'b1; 
++assign csr_crmd_pg   = 1'b0; 
++assign csr_crmd_datf = 2'b00; 
++assign csr_crmd_datm = 2'b00;
++assign csr_crmd_data = {23'b0, csr_crmd_datm, csr_crmd_datf, csr_crmd_pg, 
++                            csr_crmd_da, csr_crmd_ie, csr_crmd_plv};
++
++// PRMD
++always @(posedge clk) begin
++    if (wb_ex) begin
++        csr_prmd_pplv <= csr_crmd_plv;
++        csr_prmd_pie  <= csr_crmd_ie;
++    end
++    else if (csr_we && csr_num==`CSR_PRMD) begin
++        csr_prmd_pplv <= csr_wmask[`CSR_PRMD_PPLV]&csr_wvalue[`CSR_PRMD_PPLV]
++                      | ~csr_wmask[`CSR_PRMD_PPLV]&csr_prmd_pplv;
++        csr_prmd_pie  <= csr_wmask[`CSR_PRMD_PIE]&csr_wvalue[`CSR_PRMD_PIE]
++                      | ~csr_wmask[`CSR_PRMD_PIE]&csr_prmd_pie;
++    end
++ end
++assign csr_prmd_data  = {29'b0, csr_prmd_pie, csr_prmd_pplv};
++
++// ESTAT
++always @(posedge clk) begin
++    if (reset)
++        csr_estat_is[1:0] <= 2'b0;
++    else if (csr_we && csr_num==`CSR_ESTAT)
++        csr_estat_is[1:0] <=  csr_wmask[`CSR_ESTAT_IS10]&csr_wvalue[`CSR_ESTAT_IS10]
++                          | ~csr_wmask[`CSR_ESTAT_IS10]&csr_estat_is[1:0];
++    csr_estat_is[9:2] <= hw_int_in[7:0];
++    csr_estat_is[10] <= 1'b0;
++    if (csr_tcfg_en && timer_cnt[31:0]==32'b0)
++        csr_estat_is[11] <= 1'b1;
++    else if (csr_we && csr_num==`CSR_TICLR && csr_wmask[`CSR_TICLR_CLR]
++             && csr_wvalue[`CSR_TICLR_CLR])
++        csr_estat_is[11] <= 1'b0;
++    csr_estat_is[12] <= ipi_int_in;
++ end
++
++always @(posedge clk) begin
++    if (wb_ex) begin
++        csr_estat_ecode    <= wb_ecode;
++        csr_estat_esubcode <= wb_esubcode;
++    end
++ end
++assign csr_estat_data = { 1'b0, csr_estat_esubcode, csr_estat_ecode, 3'b0, csr_estat_is};
++
++// ERA
++always @(posedge clk) begin
++    if (wb_ex)
++        csr_era_pc <= wb_pc;
++    else if (csr_we && csr_num==`CSR_ERA)
++        csr_era_pc <= csr_wmask[`CSR_ERA_PC]&csr_wvalue[`CSR_ERA_PC]
++                    | ~csr_wmask[`CSR_ERA_PC]&csr_era_pc;
++end
++
++// EENTRY
++always @(posedge clk) begin
++    if (csr_we && csr_num==`CSR_EENTRY)
++        csr_eentry_va <= csr_wmask[`CSR_EENTRY_VA]&csr_wvalue[`CSR_EENTRY_VA]
++                       | ~csr_wmask[`CSR_EENTRY_VA]&csr_eentry_va;
++ end
++assign csr_eentry_data= {csr_eentry_va, 6'b0};
++
++// SAVE0～3
++always @(posedge clk) begin
++    if (csr_we && csr_num==`CSR_SAVE0)
++        csr_save0_data <= csr_wmask[`CSR_SAVE_DATA]&csr_wvalue[`CSR_SAVE_DATA]
++                       | ~csr_wmask[`CSR_SAVE_DATA]&csr_save0_data;
++    if (csr_we && csr_num==`CSR_SAVE1)
++        csr_save1_data <= csr_wmask[`CSR_SAVE_DATA]&csr_wvalue[`CSR_SAVE_DATA]
++                       | ~csr_wmask[`CSR_SAVE_DATA]&csr_save1_data;
++    if (csr_we && csr_num==`CSR_SAVE2)
++        csr_save2_data <= csr_wmask[`CSR_SAVE_DATA]&csr_wvalue[`CSR_SAVE_DATA]
++                       | ~csr_wmask[`CSR_SAVE_DATA]&csr_save2_data;
++    if (csr_we && csr_num==`CSR_SAVE3)
++        csr_save3_data <= csr_wmask[`CSR_SAVE_DATA]&csr_wvalue[`CSR_SAVE_DATA]
++                       | ~csr_wmask[`CSR_SAVE_DATA]&csr_save3_data;
++ end
++
++// ECFG
++always @(posedge clk) begin
++    if (reset)
++        csr_ecfg_lie <= 13'b0;
++    else if (csr_we && csr_num==`CSR_ECFG)
++        csr_ecfg_lie <= csr_wmask[`CSR_ECFG_LIE]&13'h1bff&csr_wvalue[`CSR_ECFG_LIE]
++                    | ~csr_wmask[`CSR_ECFG_LIE]&13'h1bff&csr_ecfg_lie;;
++ end
++assign csr_ecfg_data  = {19'b0, csr_ecfg_lie};
++
++// BADV
++assign wb_ex_addr_err = wb_ecode==`ECODE_ADE || wb_ecode==`ECODE_ALE;
++ always @(posedge clk) begin
++    if (wb_ex && wb_ex_addr_err)
++        csr_badv_vaddr <= (wb_ecode==`ECODE_ADE &&
++                           wb_esubcode==`ESUBCODE_ADEF) ? wb_pc : wb_vaddr;
++ end
++
++// TID
++always @(posedge clk) begin
++    if (reset)
++        csr_tid_tid <= 32'b0;
++    else if (csr_we && csr_num==`CSR_TID)
++        csr_tid_tid  <= csr_wmask[`CSR_TID_TID]&csr_wvalue[`CSR_TID_TID]
++                     | ~csr_wmask[`CSR_TID_TID]&csr_tid_tid;
++ end
++
++// TCFG
++always @(posedge clk) begin
++    if (reset)
++        csr_tcfg_en <= 1'b0;
++    else if (csr_we && csr_num==`CSR_TCFG)
++        csr_tcfg_en <= csr_wmask[`CSR_TCFG_EN]&csr_wvalue[`CSR_TCFG_EN]
++                    | ~csr_wmask[`CSR_TCFG_EN]&csr_tcfg_en;
++    if (csr_we && csr_num==`CSR_TCFG) begin
++        csr_tcfg_periodic <= csr_wmask[`CSR_TCFG_PERIOD]&csr_wvalue[`CSR_TCFG_PERIOD]
++                            | ~csr_wmask[`CSR_TCFG_PERIOD]&csr_tcfg_periodic;
++        csr_tcfg_initval <= csr_wmask[`CSR_TCFG_INITV]&csr_wvalue[`CSR_TCFG_INITV]
++                            | ~csr_wmask[`CSR_TCFG_INITV]&csr_tcfg_initval;
++    end
++ end
++assign csr_tcfg_data = {csr_tcfg_initval, csr_tcfg_periodic, csr_tcfg_en};
++
++// TVAL
++assign tcfg_next_value =  csr_wmask[31:0]&csr_wvalue[31:0]
++                       | ~csr_wmask[31:0]&{csr_tcfg_initval,
++                                           csr_tcfg_periodic, csr_tcfg_en};
++always @(posedge clk) begin
++    if (reset)
++        timer_cnt <= 32'hffffffff;
++    else if (csr_we && csr_num==`CSR_TCFG && tcfg_next_value[`CSR_TCFG_EN])
++        timer_cnt <= {tcfg_next_value[`CSR_TCFG_INITV], 2'b0};
++    else if (csr_tcfg_en && timer_cnt!=32'hffffffff) begin
++        if (timer_cnt[31:0]==32'b0 && csr_tcfg_periodic)
++            timer_cnt <= {csr_tcfg_initval, 2'b0};
++        else
++            timer_cnt <= timer_cnt - 1'b1;
++    end
++end
++assign csr_tval = timer_cnt[31:0];
++
++// TICLR
++assign csr_ticlr_clr = 1'b0;
++assign csr_ticlr_data = {31'b0, csr_ticlr_clr};
++
++assign csr_rvalue =     {32{csr_num == `CSR_CRMD  }} & csr_crmd_data
++                      | {32{csr_num == `CSR_PRMD  }} & csr_prmd_data
++                      | {32{csr_num == `CSR_ECFG  }} & csr_ecfg_data
++                      | {32{csr_num == `CSR_ESTAT }} & csr_estat_data
++                      | {32{csr_num == `CSR_ERA   }} & csr_era_pc
++                      | {32{csr_num == `CSR_EENTRY}} & csr_eentry_data
++                      | {32{csr_num == `CSR_SAVE0 }} & csr_save0_data
++                      | {32{csr_num == `CSR_SAVE1 }} & csr_save1_data
++                      | {32{csr_num == `CSR_SAVE2 }} & csr_save2_data
++                      | {32{csr_num == `CSR_SAVE3 }} & csr_save3_data
++                      | {32{csr_num == `CSR_BADV  }} & csr_badv_vaddr
++                      | {32{csr_num == `CSR_TID   }} & csr_tid_tid
++                      | {32{csr_num == `CSR_TCFG  }} & csr_tcfg_data
++                      | {32{csr_num == `CSR_TVAL  }} & csr_tval
++                      | {32{csr_num == `CSR_TICLR }} & csr_ticlr_data;
++
++endmodule
++
+diff --git a/macro.h b/macro.h
+new file mode 100644
+index 0000000..1774b62
+--- /dev/null
++++ b/macro.h
+@@ -0,0 +1,47 @@
++`define CSR_CRMD    14'h00
++`define CSR_PRMD    14'h01
++`define CSR_EUEN    14'h02
++`define CSR_ECFG    14'h04
++`define CSR_ESTAT   14'h05
++`define CSR_ERA     14'h06
++`define CSR_BADV    14'h07
++`define CSR_EENTRY  14'h0c
++`define CSR_SAVE0   14'h30
++`define CSR_SAVE1   14'h31
++`define CSR_SAVE2   14'h32
++`define CSR_SAVE3   14'h33
++`define CSR_TID     14'h40
++`define CSR_TCFG    14'h41
++`define CSR_TVAL    14'h42
++`define CSR_TICLR   14'h44
++
++
++`define CSR_CRMD_PLV    1:0
++`define CSR_CRMD_PIE    2
++
++`define CSR_PRMD_PPLV   1:0
++`define CSR_PRMD_PIE    2
++
++`define CSR_ESTAT_IS10  1:0
++`define CSR_ERA_PC      31:0
++`define CSR_EENTRY_VA   31:6
++`define CSR_SAVE_DATA   31:0
++`define CSR_TICLR_CLR   0
++
++`define CSR_ECFG_LIE    12:0
++`define CSR_ESTAT_IS10  1:0
++
++`define CSR_TCFG_EN     0
++`define CSR_TCFG_PERIOD 1
++`define CSR_TCFG_INITV  31:2
++`define CSR_TID_TID     31:0
++
++`define ESUBCODE_ADEF   9'b00
++`define ECODE_INT       6'h00
++`define ECODE_ADE       6'h08   
++`define ECODE_ALE       6'h09   
++`define ECODE_SYS       6'h0B
++`define ECODE_BRK       6'h0C   
++`define ECODE_INE       6'h0D
++`define ECODE_TLBR      6'h3F
++`define ESUBCODE_NONE   9'd0
+\ No newline at end of file
+diff --git a/mycpu_top.v b/mycpu_top.v
+index e7d8fd8..bd4b2e0 100644
+--- a/mycpu_top.v
++++ b/mycpu_top.v
+@@ -23,17 +23,28 @@ module mycpu_top(
+ reg             reset;
+ always @(posedge clk) reset <= ~resetn;
+ 
++// counter 
++reg  [63:0]     counter;
++always @(posedge clk) begin
++    if (reset) begin
++        counter <= 64'b0;
++    end
++    else begin
++        counter <= counter + 64'b1;
++    end
++end
++
+ // allowin
+-wire         ID_allowin;
+-wire         EX_allowin;
+-wire         MEM_allowin;
+-wire         WB_allowin;
++wire            ID_allowin;
++wire            EX_allowin;
++wire            MEM_allowin;
++wire            WB_allowin;
+ 
+ // memory signal
+-wire         inst_ready;
+-wire         inst_valid;
+-wire         data_ready;
+-wire         data_valid;
++wire            inst_ready;
++wire            inst_valid;
++wire            data_ready;
++wire            data_valid;
+ 
+ assign inst_ready = 1'b1;
+ assign inst_valid = 1'b1;
+@@ -41,52 +52,84 @@ assign data_ready = 1'b1;
+ assign data_valid = 1'b1;
+ 
+ // internal pipeline zipes
+-wire [64:0]  IF_to_ID_reg;
+-wire [195:0] ID_to_EX_reg;
+-wire [144:0] EX_to_MEM_reg;
+-wire [102:0] MEM_to_WB_reg;
++wire [65:0]     IF_to_ID_reg;
++wire [197:0]    ID_to_EX_reg;
++wire [144:0]    EX_to_MEM_reg;
++wire [102:0]    MEM_to_WB_reg;
+ 
+ // IF <-> ID signals
+-wire         ID_flush;
+-wire [31:0]  ID_pc_real;
++wire            ID_flush;
++wire [31:0]     ID_pc_real;
++wire            if_to_id_valid;
+ 
+ // regfile <-> ID / WB
+-wire [4:0]   rf_raddr1;
+-wire [4:0]   rf_raddr2;
+-wire [31:0]  rf_rdata1;
+-wire [31:0]  rf_rdata2;
++wire [4:0]      rf_raddr1;
++wire [4:0]      rf_raddr2;
++wire [31:0]     rf_rdata1;
++wire [31:0]     rf_rdata2;
+ 
+-wire         wb_rf_wen;
+-wire [4:0]   wb_rf_waddr;
+-wire [31:0]  wb_rf_wdata;
++wire            wb_rf_wen;
++wire [4:0]      wb_rf_waddr;
++wire [31:0]     wb_rf_wdata;
+ 
+ // WB inst_retire
+-wire [72:0]  wb_inst_retire_reg;
++wire [72:0]     wb_inst_retire_reg;
++
++wire            EX_front_valid;
++wire [ 4:0]     EX_front_addr;
++wire [31:0]     EX_front_data;
++wire            MEM_front_valid;
++wire [ 4:0]     MEM_front_addr;
++wire [31:0]     MEM_front_data;
++wire            MEM_done;
++wire [31:0]     loaded_data;
++
++wire [31:0]     done_pc;
+ 
+-wire           EX_front_valid;
+-wire [ 4:0]    EX_front_addr;
+-wire [31:0]    EX_front_data;
+-wire           MEM_front_valid;
+-wire [ 4:0]    MEM_front_addr;
+-wire [31:0]    MEM_front_data;
+-wire           MEM_done;
+-wire [31:0]    loaded_data;
++// csr signals
++wire            csr_re;
++wire [13:0]     csr_num;
++wire [31:0]     csr_rvalue;
++wire            csr_we;
++wire [31:0]     csr_wmask;
++wire [31:0]     csr_wvalue;
++wire            ertn_flush;
++wire            wb_ex;  
++wire  [31:0]    wb_pc;
++wire  [ 5:0]    wb_ecode;
++wire  [ 8:0]    wb_esubcode;
++wire  [31:0]    csr_eentry_data;
++wire  [31:0]    csr_era_pc;
++wire            flush;
++wire  [31:0]    flush_target;
++wire            has_int;
++// wire            load_use_valid;
++// wire  [ 4:0]    load_use_addr;
++// wire  [31:0]    load_use_data;
++
++wire  [85:0]    ID_except_zip;
++wire  [86:0]    EX_except_zip;
++wire  [118:0]   MEM_except_zip;
++
++wire  [31:0]    wb_vaddr;
+ 
+-wire [31:0]    done_pc;
+ 
+ // IF instance
+ IF u_IF (
+     .clk            (clk),
+     .rst            (reset),
+-    .flush          (ID_flush),
++    .ID_flush       (ID_flush),
+     .inst           (inst_sram_rdata),
+-    .pc_real        (ID_pc_real),
++    .ID_flush_target(ID_pc_real),
+     .pc_next        (inst_sram_addr),
+     .IF_to_ID_reg   (IF_to_ID_reg),
+     .ID_allowin     (ID_allowin),
+     .inst_ready     (inst_ready),
+     .inst_valid     (inst_valid),
+-    .inst_sram_en   (inst_sram_en)
++    .inst_sram_en   (inst_sram_en),
++    .flush          (flush),
++    .flush_target   (flush_target), 
++    .if_to_id_valid (if_to_id_valid)
+ );
+ 
+ // ID instance
+@@ -106,14 +149,21 @@ ID u_ID (
+     .rf_rdata2      (rf_rdata2),
+     .rf_raddr1      (rf_raddr1),
+     .rf_raddr2      (rf_raddr2),
+-    .flush          (ID_flush),
+-    .pc_real        (ID_pc_real),
++    .has_int        (has_int),
++    .ID_flush       (ID_flush),
++    .ID_flush_target(ID_pc_real),
+     .ID_to_EX_reg   (ID_to_EX_reg),
+     .ID_allowin     (ID_allowin),
+     .EX_allowin     (EX_allowin),
+-    .done_pc        (done_pc)
++    .done_pc        (done_pc),
++    .flush          (flush),
++    .ID_except_reg  (ID_except_zip),
++    .if_to_id_valid (if_to_id_valid)
++    
++    // .load_from_MEM_valid(load_from_MEM_valid),
++    // .load_from_MEM_addr(load_from_MEM_addr),
++    // .load_from_MEM_data(load_from_MEM_data)
+ );
+-
+ // EX instance
+ EX u_EX (
+     .clk            (clk),
+@@ -124,7 +174,11 @@ EX u_EX (
+     .MEM_allowin    (MEM_allowin),
+     .front_valid    (EX_front_valid),
+     .front_addr     (EX_front_addr),
+-    .front_data     (EX_front_data)
++    .front_data     (EX_front_data),
++    .flush          (flush),
++    .ID_except_zip  (ID_except_zip),
++    .EX_except_reg  (EX_except_zip),
++    .counter        (counter)
+ );
+ 
+ // MEM instance (connect its memory read_data to data_sram_rdata, and drive data_sram_* outputs)
+@@ -147,7 +201,13 @@ MEM u_MEM (
+     .front_data     (MEM_front_data),
+     .MEM_done       (MEM_done),
+     .loaded_data    (loaded_data),
+-    .done_pc        (done_pc)
++    .done_pc        (done_pc),
++    .flush          (flush),
++    .EX_except_zip  (EX_except_zip),
++    .MEM_except_reg (MEM_except_zip)
++    // .load_use_valid (load_use_valid),
++    // .load_use_addr  (load_use_addr),
++    // .load_use_data  (load_use_data)
+ );
+ 
+ // WB instance
+@@ -157,9 +217,22 @@ WB u_WB (
+     .MEM_to_WB_zip  (MEM_to_WB_reg),
+     .rf_wen         (wb_rf_wen),
+     .rf_waddr       (wb_rf_waddr),
+-    .rf_wdata       (wb_rf_wdata),
++    .rf_wdata_final (wb_rf_wdata),
+     .inst_retire_reg(wb_inst_retire_reg),
+-    .WB_allowin     (WB_allowin)
++    .WB_allowin     (WB_allowin),
++    .MEM_except_zip (MEM_except_zip),
++    .csr_re         (csr_re),
++    .csr_num        (csr_num),
++    .csr_rvalue     (csr_rvalue),
++    .csr_we         (csr_we),
++    .csr_wmask      (csr_wmask),
++    .csr_wvalue     (csr_wvalue),
++    .ertn_flush     (ertn_flush),
++    .wb_pc          (wb_pc),
++    .wb_ex          (wb_ex),
++    .wb_ecode       (wb_ecode),
++    .wb_esubcode    (wb_esubcode),
++    .wb_vaddr       (wb_vaddr)
+ );
+ 
+ // regfile instance
+@@ -174,6 +247,32 @@ regfile u_regfile (
+     .wdata  (wb_rf_wdata)
+ );
+ 
++// csr instance
++csr u_csr(
++    .clk       (clk),
++    .reset     (~resetn),
++
++    .csr_re    (csr_re),
++    .csr_num   (csr_num),
++    .csr_rvalue(csr_rvalue),
++    .csr_we    (csr_we),
++    .csr_wmask (csr_wmask),
++    .csr_wvalue(csr_wvalue),
++
++    .has_int   (has_int),
++    .ertn_flush(ertn_flush), 
++    .wb_ex     (wb_ex),
++    .wb_pc     (wb_pc),
++    .wb_vaddr  (wb_vaddr), 
++    .wb_ecode  (wb_ecode),
++    .wb_esubcode(wb_esubcode),
++    .csr_eentry_data(csr_eentry_data),
++    .csr_era_pc (csr_era_pc)
++);
++
++assign flush = ertn_flush | wb_ex;
++assign flush_target = ertn_flush ? csr_era_pc : csr_eentry_data;
++
+ // tie-off instruction sram write controls (read-only from CPU)
+ assign inst_sram_we    = 4'b0;
+ assign inst_sram_wdata = 32'b0;
+-- 
+2.51.0
+

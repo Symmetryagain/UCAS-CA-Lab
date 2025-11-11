@@ -27,7 +27,7 @@ module MEM(
         output  wire [ 31:0]    write_addr,
         output  wire [ 31:0]    write_data,
         output  reg  [102:0]    MEM_to_WB_reg,
-        output  reg  [ 86:0]    MEM_except_reg
+        output  reg  [118:0]    MEM_except_reg
 );
 
 wire            valid;
@@ -61,6 +61,9 @@ wire [31:0]     rf_wdata_ld_hu;
 
 wire [3:0]      write_we_st_b;
 wire [3:0]      write_we_st_h;
+
+wire            except_ale;
+assign except_ale = EX_except_zip[0];
 
 assign done_pc = pc;
 assign front_valid = ~res_from_mem & gr_we | res_from_mem;
@@ -120,7 +123,7 @@ assign rf_wdata_LOAD    = inst_ld_b?  rf_wdata_ld_b :
 
 assign rf_wdata         = res_from_mem ? rf_wdata_LOAD : alu_result;
 
-assign write_en         = (mem_we | res_from_mem) & valid;
+assign write_en         = (mem_we | res_from_mem) & valid & ~except_ale;
 
 assign write_we_st_b    = (write_addr[1:0]==2'b00)? 4'b0001:
                           (write_addr[1:0]==2'b01)? 4'b0010:
@@ -128,7 +131,7 @@ assign write_we_st_b    = (write_addr[1:0]==2'b00)? 4'b0001:
                           4'b1000;
 assign write_we_st_h    = (write_addr[1:0]==2'b00)? 4'b0011:
                           4'b1100;                          
-assign write_we         = {4{valid}} & 
+assign write_we         = {4{valid & ~except_ale}} & 
                           (inst_st_b? {write_we_st_b}:
                           inst_st_h? write_we_st_h:
                           inst_st_w? 4'b1111:
@@ -159,7 +162,7 @@ always @(posedge clk) begin
                 MEM_except_reg <= 87'b0;
         end
         else if (readygo & WB_allowin) begin
-                MEM_except_reg <= EX_except_zip;
+                MEM_except_reg <= {EX_except_zip, write_addr};
         end
         else if (~readygo & WB_allowin) begin
                 MEM_except_reg <= 87'b0;

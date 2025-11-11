@@ -60,6 +60,7 @@ wire [102:0]    MEM_to_WB_reg;
 // IF <-> ID signals
 wire            ID_flush;
 wire [31:0]     ID_pc_real;
+wire            if_to_id_valid;
 
 // regfile <-> ID / WB
 wire [4:0]      rf_raddr1;
@@ -108,7 +109,9 @@ wire            has_int;
 
 wire  [85:0]    ID_except_zip;
 wire  [86:0]    EX_except_zip;
-wire  [86:0]    MEM_except_zip;
+wire  [118:0]   MEM_except_zip;
+
+wire  [31:0]    wb_vaddr;
 
 
 // IF instance
@@ -125,7 +128,8 @@ IF u_IF (
     .inst_valid     (inst_valid),
     .inst_sram_en   (inst_sram_en),
     .flush          (flush),
-    .flush_target   (flush_target)
+    .flush_target   (flush_target), 
+    .if_to_id_valid (if_to_id_valid)
 );
 
 // ID instance
@@ -153,7 +157,8 @@ ID u_ID (
     .EX_allowin     (EX_allowin),
     .done_pc        (done_pc),
     .flush          (flush),
-    .ID_except_reg  (ID_except_zip)
+    .ID_except_reg  (ID_except_zip),
+    .if_to_id_valid (if_to_id_valid)
     
     // .load_from_MEM_valid(load_from_MEM_valid),
     // .load_from_MEM_addr(load_from_MEM_addr),
@@ -226,7 +231,8 @@ WB u_WB (
     .wb_pc          (wb_pc),
     .wb_ex          (wb_ex),
     .wb_ecode       (wb_ecode),
-    .wb_esubcode    (wb_esubcode)
+    .wb_esubcode    (wb_esubcode),
+    .wb_vaddr       (wb_vaddr)
 );
 
 // regfile instance
@@ -257,7 +263,7 @@ csr u_csr(
     .ertn_flush(ertn_flush), 
     .wb_ex     (wb_ex),
     .wb_pc     (wb_pc),
-    .wb_vaddr  (32'b0), 
+    .wb_vaddr  (wb_vaddr), 
     .wb_ecode  (wb_ecode),
     .wb_esubcode(wb_esubcode),
     .csr_eentry_data(csr_eentry_data),
