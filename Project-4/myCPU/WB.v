@@ -4,7 +4,7 @@ module WB(
         input   wire            clk,
         input   wire            rst,
         input   wire [102:0]    MEM_to_WB_zip,
-        input   wire [ 86:0]    MEM_except_zip,
+        input   wire [118:0]    MEM_except_zip,
         
         output  wire            WB_allowin,
         output  wire            rf_wen,
@@ -23,7 +23,8 @@ module WB(
         output  wire            ertn_flush,
         output  wire [31:0]     wb_pc,
         output  wire [ 5:0]     wb_ecode,
-        output  wire [ 8:0]     wb_esubcode
+        output  wire [ 8:0]     wb_esubcode,
+        output  wire [31:0]     wb_vaddr
 );
 
 wire            valid;
@@ -36,8 +37,6 @@ wire            except_brk;
 wire            except_ine;
 wire            except_int;
 wire            except_adef;
-wire [ 5:0]     csr_ecode;
-wire [ 8:0]     csr_esubcode;
 wire [31:0]     rf_wdata;
 
 assign WB_allowin = 1'b1;
@@ -46,7 +45,11 @@ assign {
     valid, pc, IR, gr_we, rf_waddr, rf_wdata
 } = MEM_to_WB_zip;
 
-assign {csr_re, csr_we, csr_wmask, csr_wvalue, csr_num, ertn_flush, except_sys, except_adef, except_brk, except_ine, except_int, except_ale} = MEM_except_zip;
+assign {
+        csr_re, csr_we, csr_wmask, csr_wvalue, csr_num, 
+        ertn_flush, except_sys, except_adef, except_brk, except_ine, except_int, except_ale,
+        wb_vaddr
+} = MEM_except_zip;
 
 assign rf_wen   = gr_we & valid & ~wb_ex;
 assign rf_wdata_final = csr_re ? csr_rvalue : rf_wdata;
@@ -57,14 +60,14 @@ end
 assign wb_ex = except_sys | except_adef | except_brk | except_ine | except_int | except_ale;
 assign wb_pc = pc;
 
-assign csr_ecode    =  except_sys?  `ECODE_SYS:
+assign wb_ecode    =  except_sys?  `ECODE_SYS:
                        except_adef? `ECODE_ADE:
                        except_ale?  `ECODE_ALE: 
                        except_brk?  `ECODE_BRK:
                        except_ine?  `ECODE_INE:
                        except_int?  `ECODE_INT:
                        6'b0;
-assign csr_esubcode = //inst_syscall ? `ESUBCODE_NONE : 
+assign wb_esubcode = //inst_syscall ? `ESUBCODE_NONE : 
                         9'd0;
 
 endmodule

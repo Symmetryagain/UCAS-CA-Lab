@@ -14,6 +14,7 @@ module IF (
         input   wire            flush,
         input   wire [31:0]     flush_target,
         
+        output  wire            if_to_id_valid,
         output  wire            inst_sram_en,
         output  wire [31:0]     pc_next,
         output  reg  [65:0]     IF_to_ID_reg
@@ -23,7 +24,12 @@ module IF (
 
 assign inst_sram_en = ~rst & ID_allowin;
 
+reg             valid;
+always @(posedge clk) begin
+    valid <= ~rst;
+end
 
+assign if_to_id_valid = valid & ~flush;
 
 
 wire            predict;

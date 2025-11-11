@@ -32,6 +32,7 @@ module ID(
         input   wire [ 31:0]    rf_rdata1,
         input   wire [ 31:0]    rf_rdata2,
 
+        input   wire            if_to_id_valid,
         output  wire            ID_allowin,
         output  wire [  4:0]    rf_raddr1,
         output  wire [  4:0]    rf_raddr2,
@@ -44,7 +45,7 @@ module ID(
 reg [4:0] timer_cnt;
 reg       lllast;
 wire      is_csr;
-assign is_csr = inst_csrrd | inst_csrwr | inst_csrxchg | inst_syscall | inst_ertn;
+assign is_csr = inst_csrrd | inst_csrwr | inst_csrxchg | inst_syscall | inst_ertn | inst_rdcntid;
 always @(posedge clk) begin
     if (rst) begin
         lllast <= 0;
@@ -95,7 +96,7 @@ always @(posedge clk) begin
                 valid_self <= 1'b0;
         end
         else if (ID_allowin) begin
-                valid_self <= ~ID_flush;
+                valid_self <= ~ID_flush & if_to_id_valid;
         end
         else begin
                 valid_self <= valid_self;
@@ -437,7 +438,7 @@ assign except_ine  = ~(inst_add_w | inst_sub_w | inst_slt | inst_sltu | inst_nor
                 inst_ori | inst_xori | inst_sll | inst_srl | inst_sra | inst_pcaddu12i | inst_mul | inst_mulh |
                 inst_mulhu | inst_div | inst_mod | inst_divu | inst_modu | inst_blt | inst_bge | inst_bltu |
                 inst_bgeu | inst_ld_b | inst_ld_h | inst_ld_bu | inst_ld_hu | inst_st_b | inst_st_h |
-                inst_csrrd | inst_csrwr | inst_csrxchg | inst_ertn | inst_syscall | inst_break | inst_rdcntid | inst_rdcntvl | inst_rdcntvh);
+                inst_csrrd | inst_csrwr | inst_csrxchg | inst_ertn | inst_syscall | inst_break | inst_rdcntid | inst_rdcntvl | inst_rdcntvh) & valid;
 assign except_int  = has_int;
 
 always @(posedge clk) begin
@@ -490,7 +491,7 @@ always @(posedge clk) begin
                 last_is_load <= 1'b0;
         end
         else if (EX_allowin & readygo) begin
-                last_is_load <= res_from_mem;
+                last_is_load <= res_from_mem & valid;
         end
         else begin
                 last_is_load <= last_is_load;

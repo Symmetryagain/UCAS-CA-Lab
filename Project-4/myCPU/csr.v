@@ -134,7 +134,7 @@ always @(posedge clk) begin
                           | ~csr_wmask[`CSR_ESTAT_IS10]&csr_estat_is[1:0];
     csr_estat_is[9:2] <= hw_int_in[7:0];
     csr_estat_is[10] <= 1'b0;
-    if (timer_cnt[31:0]==32'b0)
+    if (csr_tcfg_en && timer_cnt[31:0]==32'b0)
         csr_estat_is[11] <= 1'b1;
     else if (csr_we && csr_num==`CSR_TICLR && csr_wmask[`CSR_TICLR_CLR]
              && csr_wvalue[`CSR_TICLR_CLR])
