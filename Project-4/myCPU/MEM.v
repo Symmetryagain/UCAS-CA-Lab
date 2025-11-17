@@ -24,6 +24,7 @@ module MEM(
         output  wire            MEM_allowin,
         output  wire            write_en,
         output  wire [  3:0]    write_we,
+        output  wire [  1:0]    write_size,
         output  wire [ 31:0]    write_addr,
         output  wire [ 31:0]    write_data,
         output  reg  [102:0]    MEM_to_WB_reg,
@@ -136,7 +137,9 @@ assign write_we         = {4{valid & ~except_ale}} &
                           inst_st_h? write_we_st_h:
                           inst_st_w? 4'b1111:
                           4'b0000);
-                  
+
+assign write_size       = {(inst_ld_w | inst_st_w), (inst_ld_h | inst_ld_hu | inst_st_h)};
+                        
 assign write_addr       = alu_result;
 assign write_data       = inst_st_b? {4{rkd_value[7:0]}}:
                           inst_st_h? {2{rkd_value[15:0]}}:
@@ -159,13 +162,13 @@ end
 
 always @(posedge clk) begin
         if (rst) begin
-                MEM_except_reg <= 87'b0;
+                MEM_except_reg <= 119'b0;
         end
         else if (readygo & WB_allowin) begin
                 MEM_except_reg <= {EX_except_zip, write_addr};
         end
         else if (~readygo & WB_allowin) begin
-                MEM_except_reg <= 87'b0;
+                MEM_except_reg <= 119'b0;
         end 
         else begin
                 MEM_except_reg <= MEM_except_reg;

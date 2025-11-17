@@ -1,18 +1,40 @@
 module mycpu_top(
     input  wire        clk,
     input  wire        resetn,
-    // inst sram interface
-    output wire        inst_sram_en,
-    output wire [ 3:0] inst_sram_we,
-    output wire [31:0] inst_sram_addr,
-    output wire [31:0] inst_sram_wdata,
-    input  wire [31:0] inst_sram_rdata,
-    // data sram interface
-    output wire        data_sram_en,
-    output wire [ 3:0] data_sram_we,
-    output wire [31:0] data_sram_addr,
-    output wire [31:0] data_sram_wdata,
-    input  wire [31:0] data_sram_rdata,
+
+    output wire        inst_sram_req    ,
+    output wire        inst_sram_wr     ,
+    output wire [ 1:0] inst_sram_size   ,
+    output wire [ 3:0] inst_sram_wstrb  ,
+    output wire [31:0] inst_sram_addr   ,
+    output wire [31:0] inst_sram_wdata  ,
+    input  wire        inst_sram_addr_ok,
+    input  wire        inst_sram_data_ok,
+    input  wire [31:0] inst_sram_rdata  ,
+    
+    output wire        data_sram_req    ,
+    output wire        data_sram_wr     ,
+    output wire [ 1:0] data_sram_size   ,
+    output wire [ 3:0] data_sram_wstrb  ,
+    output wire [31:0] data_sram_addr   ,
+    output wire [31:0] data_sram_wdata  ,
+    input  wire        data_sram_addr_ok,
+    input  wire        data_sram_data_ok,
+    input  wire [31:0] data_sram_rdata  ,
+
+    // // inst sram interface
+    // output wire        inst_sram_en,
+    // output wire [ 3:0] inst_sram_we,
+    // output wire [31:0] inst_sram_addr,
+    // output wire [31:0] inst_sram_wdata,
+    // input  wire [31:0] inst_sram_rdata,
+    // // data sram interface
+    // output wire        data_sram_en,
+    // output wire [ 3:0] data_sram_we,
+    // output wire [31:0] data_sram_addr,
+    // output wire [31:0] data_sram_wdata,
+    // input  wire [31:0] data_sram_rdata,
+
     // trace debug interface
     output wire [31:0] debug_wb_pc,
     output wire [ 3:0] debug_wb_rf_we,
@@ -46,10 +68,10 @@ wire            inst_valid;
 wire            data_ready;
 wire            data_valid;
 
-assign inst_ready = 1'b1;
-assign inst_valid = 1'b1;
-assign data_ready = 1'b1;
-assign data_valid = 1'b1;
+assign inst_ready = inst_sram_addr_ok;
+assign inst_valid = inst_sram_data_ok;
+assign data_ready = data_sram_addr_ok;
+assign data_valid = data_sram_data_ok;
 
 // internal pipeline zipes
 wire [65:0]     IF_to_ID_reg;
@@ -126,7 +148,7 @@ IF u_IF (
     .ID_allowin     (ID_allowin),
     .inst_ready     (inst_ready),
     .inst_valid     (inst_valid),
-    .inst_sram_en   (inst_sram_en),
+    .inst_sram_en   (inst_sram_req),
     .flush          (flush),
     .flush_target   (flush_target), 
     .if_to_id_valid (if_to_id_valid)
@@ -186,8 +208,9 @@ MEM u_MEM (
     .clk            (clk),
     .rst            (reset),
     .EX_to_MEM_zip  (EX_to_MEM_reg),
-    .write_en       (data_sram_en),
-    .write_we       (data_sram_we),
+    .write_en       (data_sram_req),
+    .write_we       (data_sram_wstrb),
+    .write_size     (data_sram_size),
     .write_addr     (data_sram_addr),
     .write_data     (data_sram_wdata),
     .MEM_to_WB_reg  (MEM_to_WB_reg),
@@ -274,8 +297,11 @@ assign flush = ertn_flush | wb_ex;
 assign flush_target = ertn_flush ? csr_era_pc : csr_eentry_data;
 
 // tie-off instruction sram write controls (read-only from CPU)
-assign inst_sram_we    = 4'b0;
+assign inst_sram_wstrb = 4'b0;
 assign inst_sram_wdata = 32'b0;
+assign inst_sram_wr    = | inst_sram_wstrb;
+assign inst_sram_size  = 2'b10;
+assign data_sram_wr    = | data_sram_wstrb;
 
 // debug outputs from WB.inst_retire_reg
 // inst_retire_reg format: { pc(32), {4{rf_wen}}(4), rf_waddr(5), rf_wdata(32) }
