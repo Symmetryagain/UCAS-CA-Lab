@@ -39,8 +39,11 @@ module ID(
         output  wire            ID_flush,
         output  wire [ 31:0]    ID_flush_target,
         output  reg  [197:0]    ID_to_EX_reg,
-        output  reg  [ 85:0]    ID_except_reg
+        output  reg  [ 85:0]    ID_except_reg,
+        output  wire            ID_to_EX
 );
+
+assign ID_to_EX = readygo & EX_allowin;
 
 reg [4:0] timer_cnt;
 reg       last_is_csr;

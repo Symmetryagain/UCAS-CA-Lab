@@ -15,11 +15,30 @@ module EX(
 
         output  wire            EX_allowin,
         output  reg  [144:0]    EX_to_MEM_reg,
-        output  reg  [ 86:0]    EX_except_reg
+        output  reg  [ 86:0]    EX_except_reg,
+        input   wire            ID_to_EX,
+        output  wire            EX_to_MEM
 );
 
+assign EX_to_MEM = readygo & MEM_allowin;
+reg             at_state;
+always @(posedge clk) begin
+        if (rst) begin 
+                at_state <= 1'b0;
+        end
+        else if (ID_to_EX) begin
+                at_state <= 1'b1;
+        end
+        else if (EX_to_MEM | flush) begin
+                at_state <= 1'b0;
+        end
+        else begin
+                at_state <= at_state;
+        end
+end
+
 wire            valid;
-assign valid = ID_to_EX_valid & ~flush;
+assign          valid = ID_to_EX_valid & ~flush;
 
 wire            ID_to_EX_valid;
 wire [31:0]     pc;

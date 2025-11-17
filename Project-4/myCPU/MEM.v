@@ -28,8 +28,26 @@ module MEM(
         output  wire [ 31:0]    write_addr,
         output  wire [ 31:0]    write_data,
         output  reg  [102:0]    MEM_to_WB_reg,
-        output  reg  [118:0]    MEM_except_reg
+        output  reg  [118:0]    MEM_except_reg,
+        output  wire            MEM_to_WB
 );
+
+assign MEM_to_WB = readygo & WB_allowin;
+reg             at_state;
+always @(posedge clk) begin
+        if (rst) begin 
+                at_state <= 1'b0;
+        end
+        else if (EX_to_MEM) begin
+                at_state <= 1'b1;
+        end
+        else if (MEM_to_WB | flush) begin
+                at_state <= 1'b0;
+        end
+        else begin
+                at_state <= at_state;
+        end
+end
 
 wire            valid;
 assign valid =  EX_to_MEM_valid & ~flush;
