@@ -19,9 +19,9 @@ module EX(
 );
 
 wire            valid;
-assign valid = valid_self & ~flush;
+assign valid = ID_to_EX_valid & ~flush;
 
-wire            valid_self;
+wire            ID_to_EX_valid;
 wire [31:0]     pc;
 wire [31:0]     IR;
 wire [31:0]     src1;
@@ -66,7 +66,7 @@ assign front_data = compute_result;
 assign EX_allowin = ~valid | readygo & MEM_allowin;
 
 assign  {
-        valid_self, pc, IR, src1, src2, aluop, EX_to_MEM_zip, 
+        ID_to_EX_valid, pc, IR, src1, src2, aluop, EX_to_MEM_zip, 
         inst_mul, inst_mulh, inst_mulhu, inst_div, inst_mod, inst_divu, inst_modu, 
         inst_rdcntvh, inst_rdcntvl
 } = ID_to_EX_zip;

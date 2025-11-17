@@ -12,7 +12,7 @@ module ID(
         input   wire            clk,
         input   wire            rst,
         input   wire            EX_allowin,
-        input   wire [ 65:0]    IF_to_ID_zip,
+        input   wire [ 66:0]    IF_to_ID_zip,
         input   wire            flush,
 
         input   wire            last_MEM_done,
@@ -32,7 +32,6 @@ module ID(
         input   wire [ 31:0]    rf_rdata1,
         input   wire [ 31:0]    rf_rdata2,
 
-        input   wire            if_to_id_valid,
         output  wire            ID_allowin,
         output  wire [  4:0]    rf_raddr1,
         output  wire [  4:0]    rf_raddr2,
@@ -42,19 +41,20 @@ module ID(
         output  reg  [197:0]    ID_to_EX_reg,
         output  reg  [ 85:0]    ID_except_reg
 );
+
 reg [4:0] timer_cnt;
-reg       lllast;
+reg       last_is_csr;
 wire      is_csr;
 assign is_csr = inst_csrrd | inst_csrwr | inst_csrxchg | inst_syscall | inst_ertn | inst_rdcntid;
 always @(posedge clk) begin
     if (rst) begin
-        lllast <= 0;
+        last_is_csr <= 0;
     end
     else if (EX_allowin & readygo)  begin
-        lllast <= is_csr;
+        last_is_csr <= is_csr;
     end
     else begin
-        lllast <= lllast;
+        last_is_csr <= last_is_csr;
     end
 end
 always @(posedge clk) begin
@@ -64,7 +64,7 @@ always @(posedge clk) begin
     else if (EX_allowin & readygo & is_csr) begin
         timer_cnt <= 5'b11111;
     end
-    else if (lllast)  begin
+    else if (last_is_csr)  begin
         timer_cnt <= {1'b0, timer_cnt[4:1]};
     end
     else begin
@@ -87,23 +87,23 @@ end
 reg             last_is_load;
 reg  [ 4:0]     last_dest;
 
-reg             valid_self;
-always @(posedge clk) begin
-        if (rst) begin
-                valid_self <= 1'b0;
-        end
-        else if(flush)begin
-                valid_self <= 1'b0;
-        end
-        else if (ID_allowin) begin
-                valid_self <= ~ID_flush & if_to_id_valid;
-        end
-        else begin
-                valid_self <= valid_self;
-        end
-end
+// reg             valid_self;
+// always @(posedge clk) begin
+//         if (rst) begin
+//                 valid_self <= 1'b0;
+//         end
+//         else if(flush)begin
+//                 valid_self <= 1'b0;
+//         end
+//         else if (ID_allowin) begin
+//                 valid_self <= ~ID_flush & IF_to_ID_valid;
+//         end
+//         else begin
+//                 valid_self <= valid_self;
+//         end
+// end
 wire            valid;
-assign valid = valid_self & ~flush;
+assign valid = IF_to_ID_valid & ~flush;
 
 assign ID_allowin = ~valid | readygo & EX_allowin;
 
@@ -111,14 +111,15 @@ wire            readygo;
 wire            need_pause;
 assign need_pause = (last_dest == rf_raddr1 || last_dest == rf_raddr2) & last_is_load & (last_dest != 0);
 assign readygo = (~need_pause | need_pause & last_MEM_done & (done_pc == last_pc) ) &
-                ~(lllast & timer_cnt[0]);
+                ~(last_is_csr & timer_cnt[0]);
 
+wire            IF_to_ID_valid;
 wire            predict;
 wire [31:0]     pc;
 wire [31:0]     inst;
 wire            except_adef;
 assign {
-        predict, inst, pc, except_adef
+        IF_to_ID_valid, predict, inst, pc, except_adef
 } = IF_to_ID_zip;
 
 wire [11:0]     alu_op;
@@ -447,7 +448,7 @@ always @(posedge clk) begin
         end
         else if (EX_allowin & readygo) begin
                 ID_to_EX_reg <= {
-                        valid & ~rst, 
+                        valid, 
                         pc, inst,
                         src1_is_pc ? pc : rj_value,
                         src2_is_imm ? imm : rkd_value,

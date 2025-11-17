@@ -62,19 +62,8 @@ wire            EX_allowin;
 wire            MEM_allowin;
 wire            WB_allowin;
 
-// memory signal
-wire            inst_ready;
-wire            inst_valid;
-wire            data_ready;
-wire            data_valid;
-
-assign inst_ready = inst_sram_addr_ok;
-assign inst_valid = inst_sram_data_ok;
-assign data_ready = data_sram_addr_ok;
-assign data_valid = data_sram_data_ok;
-
 // internal pipeline zipes
-wire [65:0]     IF_to_ID_reg;
+wire [66:0]     IF_to_ID_reg;
 wire [197:0]    ID_to_EX_reg;
 wire [144:0]    EX_to_MEM_reg;
 wire [102:0]    MEM_to_WB_reg;
@@ -82,7 +71,6 @@ wire [102:0]    MEM_to_WB_reg;
 // IF <-> ID signals
 wire            ID_flush;
 wire [31:0]     ID_pc_real;
-wire            if_to_id_valid;
 
 // regfile <-> ID / WB
 wire [4:0]      rf_raddr1;
@@ -143,15 +131,14 @@ IF u_IF (
     .ID_flush       (ID_flush),
     .inst           (inst_sram_rdata),
     .ID_flush_target(ID_pc_real),
-    .pc_next        (inst_sram_addr),
+    .pc             (inst_sram_addr),
     .IF_to_ID_reg   (IF_to_ID_reg),
     .ID_allowin     (ID_allowin),
-    .inst_ready     (inst_ready),
-    .inst_valid     (inst_valid),
+    .inst_sram_addr_ok     (inst_sram_addr_ok),
+    .inst_sram_data_ok     (inst_sram_data_ok),
     .inst_sram_en   (inst_sram_req),
     .flush          (flush),
-    .flush_target   (flush_target), 
-    .if_to_id_valid (if_to_id_valid)
+    .flush_target   (flush_target)
 );
 
 // ID instance
@@ -179,9 +166,7 @@ ID u_ID (
     .EX_allowin     (EX_allowin),
     .done_pc        (done_pc),
     .flush          (flush),
-    .ID_except_reg  (ID_except_zip),
-    .if_to_id_valid (if_to_id_valid)
-    
+    .ID_except_reg  (ID_except_zip)
     // .load_from_MEM_valid(load_from_MEM_valid),
     // .load_from_MEM_addr(load_from_MEM_addr),
     // .load_from_MEM_data(load_from_MEM_data)
@@ -217,8 +202,8 @@ MEM u_MEM (
     .read_data      (data_sram_rdata),
     .MEM_allowin    (MEM_allowin),
     .WB_allowin     (WB_allowin),
-    .data_ready     (data_ready),
-    .data_valid     (data_valid),
+    .data_sram_addr_ok     (data_sram_addr_ok),
+    .data_sram_data_ok     (data_sram_data_ok),
     .front_valid    (MEM_front_valid),
     .front_addr     (MEM_front_addr),
     .front_data     (MEM_front_data),
