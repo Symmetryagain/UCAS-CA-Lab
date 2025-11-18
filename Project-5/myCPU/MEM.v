@@ -14,9 +14,7 @@ module MEM(
         output  wire            front_valid,
         output  wire [  4:0]    front_addr,
         output  wire [ 31:0]    front_data,
-        // output  wire            load_use_valid,
-        // output  wire [  4:0]    load_use_addr,
-        // output  wire [ 31:0]    load_use_data,
+        
         output  wire            MEM_done,
         output  wire [ 31:0]    done_pc,
         output  wire [ 31:0]    loaded_data,
@@ -29,6 +27,7 @@ module MEM(
         output  wire [ 31:0]    write_data,
         output  reg  [102:0]    MEM_to_WB_reg,
         output  reg  [118:0]    MEM_except_reg,
+        input   wire            EX_to_MEM,
         output  wire            MEM_to_WB
 );
 
@@ -41,7 +40,7 @@ always @(posedge clk) begin
         else if (EX_to_MEM) begin
                 at_state <= 1'b1;
         end
-        else if (MEM_to_WB | flush) begin
+        else if (MEM_to_WB) begin
                 at_state <= 1'b0;
         end
         else begin
@@ -50,7 +49,7 @@ always @(posedge clk) begin
 end
 
 wire            valid;
-assign valid =  EX_to_MEM_valid & ~flush;
+assign valid =  EX_to_MEM_valid & at_state & ~flush;
 
 wire            EX_to_MEM_valid;
 wire [31:0]     pc;

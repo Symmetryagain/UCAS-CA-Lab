@@ -1,12 +1,4 @@
-//`define ECODE_INT       6'h00
-//`define ECODE_ADE       6'h08   
-//`define ECODE_ALE       6'h09   
-//`define ECODE_SYS       6'h0B
-//`define ECODE_BRK       6'h0C   
-//`define ECODE_INE       6'h0D
-//`define ECODE_TLBR      6'h3F
-//`define ESUBCODE_NONE   9'd0
-`include "macro.h"
+`include "macros.h"
 
 module ID(
         input   wire            clk,
@@ -15,7 +7,7 @@ module ID(
         input   wire [ 66:0]    IF_to_ID_zip,
         input   wire            flush,
 
-        input   wire            last_MEM_done,
+        input   wire            mem_done,
         input   wire [ 31:0]    done_pc,
         input   wire [ 31:0]    last_load_data,
 
@@ -25,9 +17,6 @@ module ID(
         input   wire            front_from_MEM_valid,
         input   wire [  4:0]    front_from_MEM_addr,
         input   wire [ 31:0]    front_from_MEM_data,
-        // input   wire            load_from_MEM_valid,
-        // input   wire [  4:0]    load_from_MEM_addr,
-        // input   wire [ 31:0]    load_from_MEM_data,
 
         input   wire [ 31:0]    rf_rdata1,
         input   wire [ 31:0]    rf_rdata2,
@@ -40,40 +29,45 @@ module ID(
         output  wire [ 31:0]    ID_flush_target,
         output  reg  [197:0]    ID_to_EX_reg,
         output  reg  [ 85:0]    ID_except_reg,
+
+        input   wire            IF_to_ID,
         output  wire            ID_to_EX
 );
 
 assign ID_to_EX = readygo & EX_allowin;
 
-reg [4:0] timer_cnt;
-reg       last_is_csr;
 wire      is_csr;
-assign is_csr = inst_csrrd | inst_csrwr | inst_csrxchg | inst_syscall | inst_ertn | inst_rdcntid;
+assign is_csr = inst_csrrd | inst_csrwr | inst_csrxchg | inst_rdcntid;
+
+reg       last_is_csr;
 always @(posedge clk) begin
-    if (rst) begin
-        last_is_csr <= 0;
-    end
-    else if (EX_allowin & readygo)  begin
-        last_is_csr <= is_csr;
-    end
-    else begin
-        last_is_csr <= last_is_csr;
-    end
+        if (rst) begin
+                last_is_csr <= 0;
+        end
+        else if (EX_allowin & readygo)  begin
+                last_is_csr <= is_csr;
+        end
+        else begin
+                last_is_csr <= last_is_csr;
+        end
 end
+
+reg [4:0] timer_cnt;
 always @(posedge clk) begin
-    if (rst) begin
-        timer_cnt <= 5'b11111;
-    end
-    else if (EX_allowin & readygo & is_csr) begin
-        timer_cnt <= 5'b11111;
-    end
-    else if (last_is_csr)  begin
-        timer_cnt <= {1'b0, timer_cnt[4:1]};
-    end
-    else begin
-        timer_cnt <= 5'b11111;
-    end
+        if (rst) begin
+                timer_cnt <= 5'b11111;
+        end
+        else if (EX_allowin & readygo & is_csr) begin
+                timer_cnt <= 5'b11111;
+        end
+        else if (last_is_csr)  begin
+                timer_cnt <= {1'b0, timer_cnt[4:1]};
+        end
+        else begin
+                timer_cnt <= 5'b11111;
+        end
 end
+
 reg  [31:0]     last_pc;
 always @(posedge clk) begin
         if (rst) begin
@@ -88,33 +82,74 @@ always @(posedge clk) begin
 end
 
 reg             last_is_load;
-reg  [ 4:0]     last_dest;
+always @(posedge clk) begin
+        if (rst) begin
+                last_is_load <= 1'b0;
+        end
+        else if (EX_allowin & readygo) begin
+                last_is_load <= res_from_mem & valid;
+        end
+        else begin
+                last_is_load <= last_is_load;
+        end
+end
 
-// reg             valid_self;
-// always @(posedge clk) begin
-//         if (rst) begin
-//                 valid_self <= 1'b0;
-//         end
-//         else if(flush)begin
-//                 valid_self <= 1'b0;
-//         end
-//         else if (ID_allowin) begin
-//                 valid_self <= ~ID_flush & IF_to_ID_valid;
-//         end
-//         else begin
-//                 valid_self <= valid_self;
-//         end
-// end
+reg  [ 4:0]     last_dest;
+always @(posedge clk) begin
+        if (rst) begin
+                last_dest <= 5'b0;
+        end
+        else if (EX_allowin & readygo) begin
+                last_dest <= dest;
+        end
+        else begin
+                last_dest <= last_dest;
+        end
+end
+
+reg             at_state;
+always @(posedge clk) begin
+        if (rst) begin
+                at_state <= 1'b0;
+        end
+        else if (IF_to_ID) begin
+                at_state <= 1'b1;
+        end
+        else if (ID_to_EX) begin
+                at_state <= 1'b0; 
+        end
+        else begin
+                at_state <= at_state;
+        end
+end
+
 wire            valid;
-assign valid = IF_to_ID_valid & ~flush;
+assign valid = IF_to_ID_valid & at_state & ~flush;
 
 assign ID_allowin = ~valid | readygo & EX_allowin;
+
+reg             last_mem_done;
+always @(posedge clk) begin
+        if (rst) begin
+                last_mem_done <= 1'b0;
+        end
+        else if (readygo & EX_allowin) begin
+                last_mem_done <= 1'b0;
+        end
+        else if (mem_done & (done_pc == last_pc)) begin
+                last_mem_done <= 1'b1;
+        end
+        else begin
+                last_mem_done <= last_mem_done;
+        end
+end
 
 wire            readygo;
 wire            need_pause;
 assign need_pause = (last_dest == rf_raddr1 || last_dest == rf_raddr2) & last_is_load & (last_dest != 0);
-assign readygo = (~need_pause | need_pause & last_MEM_done & (done_pc == last_pc) ) &
-                ~(last_is_csr & timer_cnt[0]);
+assign readygo = (~need_pause | need_pause & last_mem_done) 
+                & ~(last_is_csr & timer_cnt[0]) 
+                & at_state;
 
 wire            IF_to_ID_valid;
 wire            predict;
@@ -490,29 +525,6 @@ always @(posedge clk) begin
         end
 end
 
-always @(posedge clk) begin
-        if (rst) begin
-                last_is_load <= 1'b0;
-        end
-        else if (EX_allowin & readygo) begin
-                last_is_load <= res_from_mem & valid;
-        end
-        else begin
-                last_is_load <= last_is_load;
-        end
-end
-
-always @(posedge clk) begin
-        if (rst) begin
-                last_dest <= 5'b0;
-        end
-        else if (EX_allowin & readygo) begin
-                last_dest <= dest;
-        end
-        else begin
-                last_dest <= last_dest;
-        end
-end
 
 assign ID_flush_target = br_target;
 

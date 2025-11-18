@@ -1,4 +1,4 @@
-`include "macro.h"
+`include "macros.h"
 
 module WB(
         input   wire            clk,
@@ -39,6 +39,21 @@ wire            except_ine;
 wire            except_int;
 wire            except_adef;
 wire [31:0]     rf_wdata;
+reg             at_state;
+always @(posedge clk) begin
+        if (rst) begin
+                at_state <= 1'b0;
+        end 
+        else if (MEM_to_WB) begin
+                at_state <= 1'b1;
+        end
+        else if (at_state) begin
+                at_state <= 1'b0; 
+        end
+        else begin
+                at_state <= at_state; 
+        end
+end
 
 assign WB_allowin = 1'b1;
 
@@ -55,7 +70,12 @@ assign {
 assign rf_wen   = gr_we & valid & ~wb_ex;
 assign rf_wdata_final = csr_re ? csr_rvalue : rf_wdata;
 always @(posedge clk) begin
-        inst_retire_reg <= {pc, {4{rf_wen}}, rf_waddr, rf_wdata_final};
+        if (at_state) begin
+                inst_retire_reg <= {pc, {4{rf_wen}}, rf_waddr, rf_wdata_final};
+        end
+        else begin
+                inst_retire_reg <= 73'b0;
+        end
 end
 
 assign wb_ex = except_sys | except_adef | except_brk | except_ine | except_int | except_ale;

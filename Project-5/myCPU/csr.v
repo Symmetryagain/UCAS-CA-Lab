@@ -1,4 +1,4 @@
-`include "macro.h"
+`include "macros.h"
 
 module csr(
         input   wire            clk,

@@ -123,6 +123,11 @@ wire  [118:0]   MEM_except_zip;
 
 wire  [31:0]    wb_vaddr;
 
+wire            IF_to_ID;
+wire            ID_to_EX;
+wire            EX_to_MEM;
+wire            MEM_to_WB;
+
 
 // IF instance
 IF u_IF (
@@ -138,7 +143,8 @@ IF u_IF (
     .inst_sram_data_ok     (inst_sram_data_ok),
     .inst_sram_en   (inst_sram_req),
     .flush          (flush),
-    .flush_target   (flush_target)
+    .flush_target   (flush_target),
+    .IF_to_ID       (IF_to_ID)
 );
 
 // ID instance
@@ -152,7 +158,7 @@ ID u_ID (
     .front_from_MEM_valid(MEM_front_valid),
     .front_from_MEM_addr (MEM_front_addr),
     .front_from_MEM_data (MEM_front_data),
-    .last_MEM_done  (MEM_done),
+    .mem_done       (MEM_done),
     .last_load_data (loaded_data),
     .rf_rdata1      (rf_rdata1),
     .rf_rdata2      (rf_rdata2),
@@ -166,10 +172,9 @@ ID u_ID (
     .EX_allowin     (EX_allowin),
     .done_pc        (done_pc),
     .flush          (flush),
-    .ID_except_reg  (ID_except_zip)
-    // .load_from_MEM_valid(load_from_MEM_valid),
-    // .load_from_MEM_addr(load_from_MEM_addr),
-    // .load_from_MEM_data(load_from_MEM_data)
+    .ID_except_reg  (ID_except_zip),
+    .IF_to_ID       (IF_to_ID),
+    .ID_to_EX       (ID_to_EX)
 );
 // EX instance
 EX u_EX (
@@ -185,7 +190,9 @@ EX u_EX (
     .flush          (flush),
     .ID_except_zip  (ID_except_zip),
     .EX_except_reg  (EX_except_zip),
-    .counter        (counter)
+    .counter        (counter),
+    .ID_to_EX       (ID_to_EX),
+    .EX_to_MEM      (EX_to_MEM)
 );
 
 // MEM instance (connect its memory read_data to data_sram_rdata, and drive data_sram_* outputs)
@@ -212,10 +219,9 @@ MEM u_MEM (
     .done_pc        (done_pc),
     .flush          (flush),
     .EX_except_zip  (EX_except_zip),
-    .MEM_except_reg (MEM_except_zip)
-    // .load_use_valid (load_use_valid),
-    // .load_use_addr  (load_use_addr),
-    // .load_use_data  (load_use_data)
+    .MEM_except_reg (MEM_except_zip),
+    .EX_to_MEM      (EX_to_MEM),
+    .MEM_to_WB      (MEM_to_WB)
 );
 
 // WB instance
@@ -240,7 +246,8 @@ WB u_WB (
     .wb_ex          (wb_ex),
     .wb_ecode       (wb_ecode),
     .wb_esubcode    (wb_esubcode),
-    .wb_vaddr       (wb_vaddr)
+    .wb_vaddr       (wb_vaddr),
+    .MEM_to_WB      (MEM_to_WB)
 );
 
 // regfile instance

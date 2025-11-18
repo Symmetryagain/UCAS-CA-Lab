@@ -29,7 +29,7 @@ always @(posedge clk) begin
         else if (ID_to_EX) begin
                 at_state <= 1'b1;
         end
-        else if (EX_to_MEM | flush) begin
+        else if (EX_to_MEM) begin
                 at_state <= 1'b0;
         end
         else begin
@@ -38,7 +38,7 @@ always @(posedge clk) begin
 end
 
 wire            valid;
-assign          valid = ID_to_EX_valid & ~flush;
+assign valid = ID_to_EX_valid & at_state & ~flush;
 
 wire            ID_to_EX_valid;
 wire [31:0]     pc;
@@ -194,7 +194,7 @@ always @(posedge clk) begin
         else if (readygo & MEM_allowin & ~flush) begin
                 init <= 1'b1;
         end
-        else if (valid) begin
+        else if (init & valid) begin
                 init <= 1'b0;
         end
         else begin
