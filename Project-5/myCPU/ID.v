@@ -109,7 +109,7 @@ end
 
 reg             at_state;
 always @(posedge clk) begin
-        if (rst) begin
+        if (rst | flush) begin
                 at_state <= 1'b0;
         end
         else if (IF_to_ID) begin

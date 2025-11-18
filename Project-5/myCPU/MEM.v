@@ -34,7 +34,7 @@ module MEM(
 assign MEM_to_WB = readygo & WB_allowin;
 reg             at_state;
 always @(posedge clk) begin
-        if (rst) begin 
+        if (rst | flush) begin 
                 at_state <= 1'b0;
         end
         else if (EX_to_MEM) begin

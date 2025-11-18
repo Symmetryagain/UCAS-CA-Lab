@@ -23,7 +23,7 @@ module EX(
 assign EX_to_MEM = readygo & MEM_allowin;
 reg             at_state;
 always @(posedge clk) begin
-        if (rst) begin 
+        if (rst | flush) begin 
                 at_state <= 1'b0;
         end
         else if (ID_to_EX) begin
