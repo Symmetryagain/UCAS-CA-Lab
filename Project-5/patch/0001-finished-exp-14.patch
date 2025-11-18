@@ -1,0 +1,1025 @@
+From 574a8c8b8900da6fd764f6a89dd6d813235da64d Mon Sep 17 00:00:00 2001
+From: symmetree <symmetree@163.com>
+Date: Tue, 18 Nov 2025 18:27:28 +0800
+Subject: [PATCH] finished exp 14
+
+---
+ EX.v                |  29 ++++++--
+ ID.v                | 168 ++++++++++++++++++++++++--------------------
+ IF.v                | 148 +++++++++++++++++++++++++++++++-------
+ MEM.v               | 104 ++++++++++++++++++++++-----
+ WB.v                |  27 ++++++-
+ csr.v               |   2 +-
+ macro.h => macros.h |   2 +
+ mycpu_top.v         | 114 +++++++++++++++++-------------
+ 8 files changed, 417 insertions(+), 177 deletions(-)
+ rename macro.h => macros.h (97%)
+
+diff --git a/EX.v b/EX.v
+index e5bd573..c8478e6 100644
+--- a/EX.v
++++ b/EX.v
+@@ -15,13 +15,32 @@ module EX(
+ 
+         output  wire            EX_allowin,
+         output  reg  [144:0]    EX_to_MEM_reg,
+-        output  reg  [ 86:0]    EX_except_reg
++        output  reg  [ 86:0]    EX_except_reg,
++        input   wire            ID_to_EX,
++        output  wire            EX_to_MEM
+ );
+ 
++assign EX_to_MEM = readygo & MEM_allowin;
++reg             at_state;
++always @(posedge clk) begin
++        if (rst) begin 
++                at_state <= 1'b0;
++        end
++        else if (ID_to_EX) begin
++                at_state <= 1'b1;
++        end
++        else if (EX_to_MEM) begin
++                at_state <= 1'b0;
++        end
++        else begin
++                at_state <= at_state;
++        end
++end
++
+ wire            valid;
+-assign valid = valid_self & ~flush;
++assign valid = ID_to_EX_valid & at_state & ~flush;
+ 
+-wire            valid_self;
++wire            ID_to_EX_valid;
+ wire [31:0]     pc;
+ wire [31:0]     IR;
+ wire [31:0]     src1;
+@@ -66,7 +85,7 @@ assign front_data = compute_result;
+ assign EX_allowin = ~valid | readygo & MEM_allowin;
+ 
+ assign  {
+-        valid_self, pc, IR, src1, src2, aluop, EX_to_MEM_zip, 
++        ID_to_EX_valid, pc, IR, src1, src2, aluop, EX_to_MEM_zip, 
+         inst_mul, inst_mulh, inst_mulhu, inst_div, inst_mod, inst_divu, inst_modu, 
+         inst_rdcntvh, inst_rdcntvl
+ } = ID_to_EX_zip;
+@@ -175,7 +194,7 @@ always @(posedge clk) begin
+         else if (readygo & MEM_allowin & ~flush) begin
+                 init <= 1'b1;
+         end
+-        else if (valid) begin
++        else if (init & valid) begin
+                 init <= 1'b0;
+         end
+         else begin
+diff --git a/ID.v b/ID.v
+index cb0ce54..697a2c9 100644
+--- a/ID.v
++++ b/ID.v
+@@ -1,21 +1,13 @@
+-//`define ECODE_INT       6'h00
+-//`define ECODE_ADE       6'h08   
+-//`define ECODE_ALE       6'h09   
+-//`define ECODE_SYS       6'h0B
+-//`define ECODE_BRK       6'h0C   
+-//`define ECODE_INE       6'h0D
+-//`define ECODE_TLBR      6'h3F
+-//`define ESUBCODE_NONE   9'd0
+-`include "macro.h"
++`include "macros.h"
+ 
+ module ID(
+         input   wire            clk,
+         input   wire            rst,
+         input   wire            EX_allowin,
+-        input   wire [ 65:0]    IF_to_ID_zip,
++        input   wire [ 66:0]    IF_to_ID_zip,
+         input   wire            flush,
+ 
+-        input   wire            last_MEM_done,
++        input   wire            mem_done,
+         input   wire [ 31:0]    done_pc,
+         input   wire [ 31:0]    last_load_data,
+ 
+@@ -25,14 +17,10 @@ module ID(
+         input   wire            front_from_MEM_valid,
+         input   wire [  4:0]    front_from_MEM_addr,
+         input   wire [ 31:0]    front_from_MEM_data,
+-        // input   wire            load_from_MEM_valid,
+-        // input   wire [  4:0]    load_from_MEM_addr,
+-        // input   wire [ 31:0]    load_from_MEM_data,
+ 
+         input   wire [ 31:0]    rf_rdata1,
+         input   wire [ 31:0]    rf_rdata2,
+ 
+-        input   wire            if_to_id_valid,
+         output  wire            ID_allowin,
+         output  wire [  4:0]    rf_raddr1,
+         output  wire [  4:0]    rf_raddr2,
+@@ -40,37 +28,46 @@ module ID(
+         output  wire            ID_flush,
+         output  wire [ 31:0]    ID_flush_target,
+         output  reg  [197:0]    ID_to_EX_reg,
+-        output  reg  [ 85:0]    ID_except_reg
++        output  reg  [ 85:0]    ID_except_reg,
++
++        input   wire            IF_to_ID,
++        output  wire            ID_to_EX
+ );
+-reg [4:0] timer_cnt;
+-reg       lllast;
++
++assign ID_to_EX = readygo & EX_allowin;
++
+ wire      is_csr;
+-assign is_csr = inst_csrrd | inst_csrwr | inst_csrxchg | inst_syscall | inst_ertn | inst_rdcntid;
++assign is_csr = inst_csrrd | inst_csrwr | inst_csrxchg | inst_rdcntid;
++
++reg       last_is_csr;
+ always @(posedge clk) begin
+-    if (rst) begin
+-        lllast <= 0;
+-    end
+-    else if (EX_allowin & readygo)  begin
+-        lllast <= is_csr;
+-    end
+-    else begin
+-        lllast <= lllast;
+-    end
++        if (rst) begin
++                last_is_csr <= 0;
++        end
++        else if (EX_allowin & readygo)  begin
++                last_is_csr <= is_csr;
++        end
++        else begin
++                last_is_csr <= last_is_csr;
++        end
+ end
++
++reg [4:0] timer_cnt;
+ always @(posedge clk) begin
+-    if (rst) begin
+-        timer_cnt <= 5'b11111;
+-    end
+-    else if (EX_allowin & readygo & is_csr) begin
+-        timer_cnt <= 5'b11111;
+-    end
+-    else if (lllast)  begin
+-        timer_cnt <= {1'b0, timer_cnt[4:1]};
+-    end
+-    else begin
+-        timer_cnt <= 5'b11111;
+-    end
++        if (rst) begin
++                timer_cnt <= 5'b11111;
++        end
++        else if (EX_allowin & readygo & is_csr) begin
++                timer_cnt <= 5'b11111;
++        end
++        else if (last_is_csr)  begin
++                timer_cnt <= {1'b0, timer_cnt[4:1]};
++        end
++        else begin
++                timer_cnt <= 5'b11111;
++        end
+ end
++
+ reg  [31:0]     last_pc;
+ always @(posedge clk) begin
+         if (rst) begin
+@@ -85,40 +82,82 @@ always @(posedge clk) begin
+ end
+ 
+ reg             last_is_load;
++always @(posedge clk) begin
++        if (rst) begin
++                last_is_load <= 1'b0;
++        end
++        else if (EX_allowin & readygo) begin
++                last_is_load <= res_from_mem & valid;
++        end
++        else begin
++                last_is_load <= last_is_load;
++        end
++end
++
+ reg  [ 4:0]     last_dest;
++always @(posedge clk) begin
++        if (rst) begin
++                last_dest <= 5'b0;
++        end
++        else if (EX_allowin & readygo) begin
++                last_dest <= dest;
++        end
++        else begin
++                last_dest <= last_dest;
++        end
++end
+ 
+-reg             valid_self;
++reg             at_state;
+ always @(posedge clk) begin
+         if (rst) begin
+-                valid_self <= 1'b0;
++                at_state <= 1'b0;
+         end
+-        else if(flush)begin
+-                valid_self <= 1'b0;
++        else if (IF_to_ID) begin
++                at_state <= 1'b1;
+         end
+-        else if (ID_allowin) begin
+-                valid_self <= ~ID_flush & if_to_id_valid;
++        else if (ID_to_EX) begin
++                at_state <= 1'b0; 
+         end
+         else begin
+-                valid_self <= valid_self;
++                at_state <= at_state;
+         end
+ end
++
+ wire            valid;
+-assign valid = valid_self & ~flush;
++assign valid = IF_to_ID_valid & at_state & ~flush;
+ 
+ assign ID_allowin = ~valid | readygo & EX_allowin;
+ 
++reg             last_mem_done;
++always @(posedge clk) begin
++        if (rst) begin
++                last_mem_done <= 1'b0;
++        end
++        else if (readygo & EX_allowin) begin
++                last_mem_done <= 1'b0;
++        end
++        else if (mem_done & (done_pc == last_pc)) begin
++                last_mem_done <= 1'b1;
++        end
++        else begin
++                last_mem_done <= last_mem_done;
++        end
++end
++
+ wire            readygo;
+ wire            need_pause;
+ assign need_pause = (last_dest == rf_raddr1 || last_dest == rf_raddr2) & last_is_load & (last_dest != 0);
+-assign readygo = (~need_pause | need_pause & last_MEM_done & (done_pc == last_pc) ) &
+-                ~(lllast & timer_cnt[0]);
++assign readygo = (~need_pause | need_pause & last_mem_done) 
++                & ~(last_is_csr & timer_cnt[0]) 
++                & at_state;
+ 
++wire            IF_to_ID_valid;
+ wire            predict;
+ wire [31:0]     pc;
+ wire [31:0]     inst;
+ wire            except_adef;
+ assign {
+-        predict, inst, pc, except_adef
++        IF_to_ID_valid, predict, inst, pc, except_adef
+ } = IF_to_ID_zip;
+ 
+ wire [11:0]     alu_op;
+@@ -405,7 +444,7 @@ assign  br_taken        = (   inst_beq  &&  rj_eq_rd
+                            || inst_jirl
+                            || inst_bl
+                            || inst_b
+-                          ) && valid;
++                        ) & valid & readygo;
+ assign  br_target       = (inst_beq || inst_bne || inst_bl || inst_b || inst_blt || inst_bge || inst_bltu || inst_bgeu) ? (pc + br_offs) :
+                                                    /*inst_jirl*/ (rj_value + jirl_offs);
+ 
+@@ -447,7 +486,7 @@ always @(posedge clk) begin
+         end
+         else if (EX_allowin & readygo) begin
+                 ID_to_EX_reg <= {
+-                        valid & ~rst, 
++                        valid, 
+                         pc, inst,
+                         src1_is_pc ? pc : rj_value,
+                         src2_is_imm ? imm : rkd_value,
+@@ -486,29 +525,6 @@ always @(posedge clk) begin
+         end
+ end
+ 
+-always @(posedge clk) begin
+-        if (rst) begin
+-                last_is_load <= 1'b0;
+-        end
+-        else if (EX_allowin & readygo) begin
+-                last_is_load <= res_from_mem & valid;
+-        end
+-        else begin
+-                last_is_load <= last_is_load;
+-        end
+-end
+-
+-always @(posedge clk) begin
+-        if (rst) begin
+-                last_dest <= 5'b0;
+-        end
+-        else if (EX_allowin & readygo) begin
+-                last_dest <= dest;
+-        end
+-        else begin
+-                last_dest <= last_dest;
+-        end
+-end
+ 
+ assign ID_flush_target = br_target;
+ 
+diff --git a/IF.v b/IF.v
+index 389c2fe..c1a2731 100644
+--- a/IF.v
++++ b/IF.v
+@@ -1,8 +1,10 @@
++`include "macros.h"
++
+ module IF (
+         input   wire            clk,
+         input   wire            rst,
+-        input   wire            inst_ready,
+-        input   wire            inst_valid,
++        input   wire            inst_sram_addr_ok,
++        input   wire            inst_sram_data_ok,
+ 
+         input   wire            ID_allowin,
+ 
+@@ -14,23 +16,17 @@ module IF (
+         input   wire            flush,
+         input   wire [31:0]     flush_target,
+         
+-        output  wire            if_to_id_valid,
+         output  wire            inst_sram_en,
+-        output  wire [31:0]     pc_next,
+-        output  reg  [65:0]     IF_to_ID_reg
+-);
++        output  reg  [31:0]     pc,
++        output  reg  [66:0]     IF_to_ID_reg,
+ 
+-`define PC_INIT 32'h1bfffffc
+-
+-assign inst_sram_en = ~rst & ID_allowin;
++        output  wire            IF_to_ID
++);
+ 
+-reg             valid;
+-always @(posedge clk) begin
+-    valid <= ~rst;
+-end
+ 
+-assign if_to_id_valid = valid & ~flush;
++assign IF_to_ID = readygo & ID_allowin;
+ 
++assign inst_sram_en = wait_addr_ok | lock_addr;
+ 
+ wire            predict;
+ // wire            br_taken;
+@@ -66,20 +62,48 @@ assign predict          = 1'b0;
+ 
+ // decoder_6_64 u_dec0(.in(op_31_26), .out(op_31_26_d));
+ 
+-reg  [31:0]     pc;
+ reg  [31:0]     IR;
++reg             lock_addr;
++reg             lock_data;
++reg             wait_addr_ok;
++reg             wait_data_ok;
++reg             readygo;
++
++wire [31:0]     pc_next;
++assign pc_next = flush ? flush_target : 
++                 ID_flush ? ID_flush_target : 
++                 lock_data ? last_target : pc + 4;
++
++wire            except_adef;
++assign except_adef = (|pc[1:0]);
+ 
+-assign pc_next = flush ? flush_target: ID_flush ? ID_flush_target : pc + 4;
++wire            g_flush;
++assign g_flush = flush | ID_flush;
+ 
+-wire except_adef;
++reg  [31:0]     last_target;
++always @(posedge clk) begin
++        if (rst) begin
++                last_target <= 32'b0;
++        end
++        else if (g_flush) begin
++                last_target <= flush ? flush_target : ID_flush_target;
++        end
++        else begin
++                last_target <= last_target;
++        end
++end
+ 
+-assign except_adef = (|pc[1:0]);
++wire            nxt_is_wait_addr_ok;
++assign nxt_is_wait_addr_ok = wait_data_ok & g_flush & inst_sram_data_ok
++                           | readygo & g_flush 
++                           | readygo & ID_allowin 
++                           | lock_data & inst_sram_data_ok;
+ 
+ always @(posedge clk) begin
+         if (rst) begin
+                 pc <= `PC_INIT;
+         end
+-        else if (ID_allowin) begin 
++        else if (nxt_is_wait_addr_ok) begin 
+                 pc <= pc_next;
+         end 
+         else begin
+@@ -87,11 +111,86 @@ always @(posedge clk) begin
+         end
+ end
+ 
++always @(posedge clk) begin
++        if (rst) begin
++                wait_addr_ok <= 1'b1;
++        end
++        else if (nxt_is_wait_addr_ok) begin
++                wait_addr_ok <= 1'b1;
++        end
++        else if (wait_addr_ok & inst_sram_addr_ok | wait_addr_ok & g_flush) begin
++                wait_addr_ok <= 1'b0;
++        end
++        else begin
++                wait_addr_ok <= wait_addr_ok;
++        end
++end
++
++always @(posedge clk) begin
++        if (rst | g_flush) begin
++                wait_data_ok <= 1'b0;
++        end
++        else if (wait_addr_ok & inst_sram_addr_ok) begin
++                wait_data_ok <= 1'b1;
++        end
++        else if (wait_data_ok & inst_sram_data_ok) begin
++                wait_data_ok <= 1'b0;
++        end
++        else begin
++                wait_data_ok <= wait_data_ok;
++        end
++end
++
++always @(posedge clk) begin
++        if (rst | g_flush) begin
++                readygo <= 1'b0;
++        end
++        else if (wait_data_ok & inst_sram_data_ok) begin
++                readygo <= 1'b1;
++        end
++        else if (readygo & ID_allowin) begin
++                readygo <= 1'b0;
++        end
++        else begin
++                readygo <= readygo;
++        end
++end
++
++always @(posedge clk) begin
++        if (rst) begin
++                lock_addr <= 1'b0;
++        end
++        else if (wait_addr_ok & g_flush & ~inst_sram_addr_ok) begin
++                lock_addr <= 1'b1;
++        end
++        else if (lock_addr & inst_sram_addr_ok) begin 
++                lock_addr <= 1'b0;
++        end
++        else begin
++                lock_addr <= lock_addr;
++        end
++end
++
++always @(posedge clk) begin
++        if (rst) begin
++                lock_data <= 1'b0;
++        end
++        else if (wait_addr_ok & g_flush & inst_sram_addr_ok | lock_addr & inst_sram_addr_ok | wait_data_ok & g_flush & ~inst_sram_data_ok) begin
++                lock_data <= 1'b1;
++        end
++        else if (lock_data & inst_sram_data_ok) begin 
++                lock_data <= 1'b0;
++        end
++        else begin
++                lock_data <= lock_data;
++        end
++end
++
+ always @(posedge clk) begin
+         if (rst) begin
+                 IR <= 32'b0;
+         end
+-        else if (ID_allowin) begin
++        else if (wait_data_ok & inst_sram_data_ok) begin
+                 IR <= inst;
+         end
+         else begin
+@@ -101,13 +200,10 @@ end
+ 
+ always @(posedge clk) begin
+         if (rst) begin
+-                IF_to_ID_reg <= {1'b0, 32'b0, `PC_INIT, 1'b0};
++                IF_to_ID_reg <= 67'b0;
+         end
+-        // else if(flush)begin
+-        //         IF_to_ID_reg <= {predict, ,pc};
+-        // end
+-        else if (ID_allowin) begin
+-                IF_to_ID_reg <= {predict, inst, pc, except_adef};
++        else if (readygo & ID_allowin) begin
++                IF_to_ID_reg <= {~g_flush, predict, IR, pc, except_adef};
+         end else begin
+                 IF_to_ID_reg <= IF_to_ID_reg;
+         end
+diff --git a/MEM.v b/MEM.v
+index 6e30789..9fea950 100644
+--- a/MEM.v
++++ b/MEM.v
+@@ -3,8 +3,8 @@ module MEM(
+         input   wire            rst,
+         input   wire            WB_allowin,
+         
+-        input   wire            data_ready,
+-        input   wire            data_valid,
++        input   wire            data_sram_addr_ok,
++        input   wire            data_sram_data_ok,
+         input   wire [ 31:0]    read_data,
+         input   wire [144:0]    EX_to_MEM_zip,
+         input   wire [ 86:0]    EX_except_zip,
+@@ -14,9 +14,7 @@ module MEM(
+         output  wire            front_valid,
+         output  wire [  4:0]    front_addr,
+         output  wire [ 31:0]    front_data,
+-        // output  wire            load_use_valid,
+-        // output  wire [  4:0]    load_use_addr,
+-        // output  wire [ 31:0]    load_use_data,
++        
+         output  wire            MEM_done,
+         output  wire [ 31:0]    done_pc,
+         output  wire [ 31:0]    loaded_data,
+@@ -24,16 +22,36 @@ module MEM(
+         output  wire            MEM_allowin,
+         output  wire            write_en,
+         output  wire [  3:0]    write_we,
++        output  wire [  1:0]    write_size,
+         output  wire [ 31:0]    write_addr,
+         output  wire [ 31:0]    write_data,
+         output  reg  [102:0]    MEM_to_WB_reg,
+-        output  reg  [118:0]    MEM_except_reg
++        output  reg  [118:0]    MEM_except_reg,
++        input   wire            EX_to_MEM,
++        output  wire            MEM_to_WB
+ );
+ 
++assign MEM_to_WB = readygo & WB_allowin;
++reg             at_state;
++always @(posedge clk) begin
++        if (rst) begin 
++                at_state <= 1'b0;
++        end
++        else if (EX_to_MEM) begin
++                at_state <= 1'b1;
++        end
++        else if (MEM_to_WB) begin
++                at_state <= 1'b0;
++        end
++        else begin
++                at_state <= at_state;
++        end
++end
++
+ wire            valid;
+-assign valid =  valid_self & ~flush;
++assign valid =  EX_to_MEM_valid & at_state & ~flush;
+ 
+-wire            valid_self;
++wire            EX_to_MEM_valid;
+ wire [31:0]     pc;
+ wire [31:0]     IR;
+ 
+@@ -73,13 +91,61 @@ assign front_data = res_from_mem ? rf_wdata_LOAD : alu_result;
+ assign MEM_done = readygo;
+ assign loaded_data = rf_wdata_LOAD;
+ 
++reg             init;
++reg             wait_addr_ok;
++reg             wait_data_ok;
+ reg             readygo;
+ 
+ always @(posedge clk) begin
+-        if (rst) begin
++        if (rst | flush) begin
++                init <= 1'b1;
++        end
++        else if (readygo & WB_allowin) begin
++                init <= 1'b1;
++        end
++        else if (init & valid) begin
++                init <= 1'b0;
++        end
++        else begin
++                init <= init;
++        end
++end
++
++always @(posedge clk) begin
++        if (rst | flush) begin
++                wait_addr_ok <= 1'b0;
++        end
++        else if (init & valid & (res_from_mem | mem_we) & ~except_ale) begin
++                wait_addr_ok <= 1'b1;
++        end
++        else if (wait_addr_ok & data_sram_addr_ok) begin
++                wait_addr_ok <= 1'b0;
++        end
++        else begin
++                wait_addr_ok <= wait_addr_ok;
++        end
++end
++
++always @(posedge clk) begin
++        if (rst | flush) begin
++                wait_data_ok <= 1'b0;
++        end
++        else if (wait_addr_ok & data_sram_addr_ok) begin
++                wait_data_ok <= 1'b1;
++        end
++        else if (wait_data_ok & data_sram_data_ok) begin
++                wait_data_ok <= 1'b0;
++        end
++        else begin
++                wait_data_ok <= wait_data_ok;
++        end
++end
++
++always @(posedge clk) begin
++        if (rst | flush) begin
+                 readygo <= 1'b0;
+         end
+-        else if (~readygo & (data_ready | data_valid) & valid) begin
++        else if (init & valid & (~res_from_mem & ~mem_we | except_ale) | wait_data_ok & data_sram_data_ok) begin
+                 readygo <= 1'b1;
+         end
+         else if (readygo & WB_allowin) begin
+@@ -93,7 +159,7 @@ end
+ assign MEM_allowin = ~valid | (readygo & WB_allowin);
+ 
+ assign  {
+-        valid_self, pc, IR, 
++        EX_to_MEM_valid, pc, IR, 
+         inst_ld_b, inst_ld_bu, inst_ld_h, inst_ld_hu, inst_ld_w, 
+         inst_st_b, inst_st_h, inst_st_w, 
+         mem_we, res_from_mem, gr_we, rkd_value, rf_waddr, alu_result
+@@ -123,7 +189,7 @@ assign rf_wdata_LOAD    = inst_ld_b?  rf_wdata_ld_b :
+ 
+ assign rf_wdata         = res_from_mem ? rf_wdata_LOAD : alu_result;
+ 
+-assign write_en         = (mem_we | res_from_mem) & valid & ~except_ale;
++assign write_en         = wait_addr_ok;
+ 
+ assign write_we_st_b    = (write_addr[1:0]==2'b00)? 4'b0001:
+                           (write_addr[1:0]==2'b01)? 4'b0010:
+@@ -131,12 +197,14 @@ assign write_we_st_b    = (write_addr[1:0]==2'b00)? 4'b0001:
+                           4'b1000;
+ assign write_we_st_h    = (write_addr[1:0]==2'b00)? 4'b0011:
+                           4'b1100;                          
+-assign write_we         = {4{valid & ~except_ale}} & 
+-                          (inst_st_b? {write_we_st_b}:
++assign write_we         = {4{wait_addr_ok}} & 
++                          (inst_st_b? write_we_st_b:
+                           inst_st_h? write_we_st_h:
+                           inst_st_w? 4'b1111:
+                           4'b0000);
+-                  
++
++assign write_size       = {(inst_ld_w | inst_st_w), (inst_ld_h | inst_ld_hu | inst_st_h)};
++                        
+ assign write_addr       = alu_result;
+ assign write_data       = inst_st_b? {4{rkd_value[7:0]}}:
+                           inst_st_h? {2{rkd_value[15:0]}}:
+@@ -147,7 +215,7 @@ always @(posedge clk) begin
+                 MEM_to_WB_reg <= 103'b0;
+         end
+         else if (readygo & WB_allowin) begin
+-                MEM_to_WB_reg <= {valid & ~rst, pc, IR, gr_we, rf_waddr, rf_wdata};
++                MEM_to_WB_reg <= {valid, pc, IR, gr_we, rf_waddr, rf_wdata};
+         end
+         else if (~readygo & WB_allowin) begin
+                 MEM_to_WB_reg <= 103'b0;
+@@ -159,13 +227,13 @@ end
+ 
+ always @(posedge clk) begin
+         if (rst) begin
+-                MEM_except_reg <= 87'b0;
++                MEM_except_reg <= 119'b0;
+         end
+         else if (readygo & WB_allowin) begin
+                 MEM_except_reg <= {EX_except_zip, write_addr};
+         end
+         else if (~readygo & WB_allowin) begin
+-                MEM_except_reg <= 87'b0;
++                MEM_except_reg <= 119'b0;
+         end 
+         else begin
+                 MEM_except_reg <= MEM_except_reg;
+diff --git a/WB.v b/WB.v
+index 3e0895a..30aec51 100644
+--- a/WB.v
++++ b/WB.v
+@@ -1,4 +1,4 @@
+-`include "macro.h"
++`include "macros.h"
+ 
+ module WB(
+         input   wire            clk,
+@@ -24,7 +24,8 @@ module WB(
+         output  wire [31:0]     wb_pc,
+         output  wire [ 5:0]     wb_ecode,
+         output  wire [ 8:0]     wb_esubcode,
+-        output  wire [31:0]     wb_vaddr
++        output  wire [31:0]     wb_vaddr,
++        input   wire            MEM_to_WB
+ );
+ 
+ wire            valid;
+@@ -38,6 +39,21 @@ wire            except_ine;
+ wire            except_int;
+ wire            except_adef;
+ wire [31:0]     rf_wdata;
++reg             at_state;
++always @(posedge clk) begin
++        if (rst) begin
++                at_state <= 1'b0;
++        end 
++        else if (MEM_to_WB) begin
++                at_state <= 1'b1;
++        end
++        else if (at_state) begin
++                at_state <= 1'b0; 
++        end
++        else begin
++                at_state <= at_state; 
++        end
++end
+ 
+ assign WB_allowin = 1'b1;
+ 
+@@ -54,7 +70,12 @@ assign {
+ assign rf_wen   = gr_we & valid & ~wb_ex;
+ assign rf_wdata_final = csr_re ? csr_rvalue : rf_wdata;
+ always @(posedge clk) begin
+-        inst_retire_reg <= {pc, {4{rf_wen}}, rf_waddr, rf_wdata_final};
++        if (at_state) begin
++                inst_retire_reg <= {pc, {4{rf_wen}}, rf_waddr, rf_wdata_final};
++        end
++        else begin
++                inst_retire_reg <= 73'b0;
++        end
+ end
+ 
+ assign wb_ex = except_sys | except_adef | except_brk | except_ine | except_int | except_ale;
+diff --git a/csr.v b/csr.v
+index c302c06..244aba4 100644
+--- a/csr.v
++++ b/csr.v
+@@ -1,4 +1,4 @@
+-`include "macro.h"
++`include "macros.h"
+ 
+ module csr(
+         input   wire            clk,
+diff --git a/macro.h b/macros.h
+similarity index 97%
+rename from macro.h
+rename to macros.h
+index 1774b62..66772a9 100644
+--- a/macro.h
++++ b/macros.h
+@@ -1,3 +1,5 @@
++`define PC_INIT 32'h1c000000
++
+ `define CSR_CRMD    14'h00
+ `define CSR_PRMD    14'h01
+ `define CSR_EUEN    14'h02
+diff --git a/mycpu_top.v b/mycpu_top.v
+index bd4b2e0..5d443fe 100644
+--- a/mycpu_top.v
++++ b/mycpu_top.v
+@@ -1,18 +1,40 @@
+ module mycpu_top(
+     input  wire        clk,
+     input  wire        resetn,
+-    // inst sram interface
+-    output wire        inst_sram_en,
+-    output wire [ 3:0] inst_sram_we,
+-    output wire [31:0] inst_sram_addr,
+-    output wire [31:0] inst_sram_wdata,
+-    input  wire [31:0] inst_sram_rdata,
+-    // data sram interface
+-    output wire        data_sram_en,
+-    output wire [ 3:0] data_sram_we,
+-    output wire [31:0] data_sram_addr,
+-    output wire [31:0] data_sram_wdata,
+-    input  wire [31:0] data_sram_rdata,
++
++    output wire        inst_sram_req    ,
++    output wire        inst_sram_wr     ,
++    output wire [ 1:0] inst_sram_size   ,
++    output wire [ 3:0] inst_sram_wstrb  ,
++    output wire [31:0] inst_sram_addr   ,
++    output wire [31:0] inst_sram_wdata  ,
++    input  wire        inst_sram_addr_ok,
++    input  wire        inst_sram_data_ok,
++    input  wire [31:0] inst_sram_rdata  ,
++    
++    output wire        data_sram_req    ,
++    output wire        data_sram_wr     ,
++    output wire [ 1:0] data_sram_size   ,
++    output wire [ 3:0] data_sram_wstrb  ,
++    output wire [31:0] data_sram_addr   ,
++    output wire [31:0] data_sram_wdata  ,
++    input  wire        data_sram_addr_ok,
++    input  wire        data_sram_data_ok,
++    input  wire [31:0] data_sram_rdata  ,
++
++    // // inst sram interface
++    // output wire        inst_sram_en,
++    // output wire [ 3:0] inst_sram_we,
++    // output wire [31:0] inst_sram_addr,
++    // output wire [31:0] inst_sram_wdata,
++    // input  wire [31:0] inst_sram_rdata,
++    // // data sram interface
++    // output wire        data_sram_en,
++    // output wire [ 3:0] data_sram_we,
++    // output wire [31:0] data_sram_addr,
++    // output wire [31:0] data_sram_wdata,
++    // input  wire [31:0] data_sram_rdata,
++
+     // trace debug interface
+     output wire [31:0] debug_wb_pc,
+     output wire [ 3:0] debug_wb_rf_we,
+@@ -40,19 +62,8 @@ wire            EX_allowin;
+ wire            MEM_allowin;
+ wire            WB_allowin;
+ 
+-// memory signal
+-wire            inst_ready;
+-wire            inst_valid;
+-wire            data_ready;
+-wire            data_valid;
+-
+-assign inst_ready = 1'b1;
+-assign inst_valid = 1'b1;
+-assign data_ready = 1'b1;
+-assign data_valid = 1'b1;
+-
+ // internal pipeline zipes
+-wire [65:0]     IF_to_ID_reg;
++wire [66:0]     IF_to_ID_reg;
+ wire [197:0]    ID_to_EX_reg;
+ wire [144:0]    EX_to_MEM_reg;
+ wire [102:0]    MEM_to_WB_reg;
+@@ -60,7 +71,6 @@ wire [102:0]    MEM_to_WB_reg;
+ // IF <-> ID signals
+ wire            ID_flush;
+ wire [31:0]     ID_pc_real;
+-wire            if_to_id_valid;
+ 
+ // regfile <-> ID / WB
+ wire [4:0]      rf_raddr1;
+@@ -113,6 +123,11 @@ wire  [118:0]   MEM_except_zip;
+ 
+ wire  [31:0]    wb_vaddr;
+ 
++wire            IF_to_ID;
++wire            ID_to_EX;
++wire            EX_to_MEM;
++wire            MEM_to_WB;
++
+ 
+ // IF instance
+ IF u_IF (
+@@ -121,15 +136,15 @@ IF u_IF (
+     .ID_flush       (ID_flush),
+     .inst           (inst_sram_rdata),
+     .ID_flush_target(ID_pc_real),
+-    .pc_next        (inst_sram_addr),
++    .pc             (inst_sram_addr),
+     .IF_to_ID_reg   (IF_to_ID_reg),
+     .ID_allowin     (ID_allowin),
+-    .inst_ready     (inst_ready),
+-    .inst_valid     (inst_valid),
+-    .inst_sram_en   (inst_sram_en),
++    .inst_sram_addr_ok     (inst_sram_addr_ok),
++    .inst_sram_data_ok     (inst_sram_data_ok),
++    .inst_sram_en   (inst_sram_req),
+     .flush          (flush),
+-    .flush_target   (flush_target), 
+-    .if_to_id_valid (if_to_id_valid)
++    .flush_target   (flush_target),
++    .IF_to_ID       (IF_to_ID)
+ );
+ 
+ // ID instance
+@@ -143,7 +158,7 @@ ID u_ID (
+     .front_from_MEM_valid(MEM_front_valid),
+     .front_from_MEM_addr (MEM_front_addr),
+     .front_from_MEM_data (MEM_front_data),
+-    .last_MEM_done  (MEM_done),
++    .mem_done       (MEM_done),
+     .last_load_data (loaded_data),
+     .rf_rdata1      (rf_rdata1),
+     .rf_rdata2      (rf_rdata2),
+@@ -158,11 +173,8 @@ ID u_ID (
+     .done_pc        (done_pc),
+     .flush          (flush),
+     .ID_except_reg  (ID_except_zip),
+-    .if_to_id_valid (if_to_id_valid)
+-    
+-    // .load_from_MEM_valid(load_from_MEM_valid),
+-    // .load_from_MEM_addr(load_from_MEM_addr),
+-    // .load_from_MEM_data(load_from_MEM_data)
++    .IF_to_ID       (IF_to_ID),
++    .ID_to_EX       (ID_to_EX)
+ );
+ // EX instance
+ EX u_EX (
+@@ -178,7 +190,9 @@ EX u_EX (
+     .flush          (flush),
+     .ID_except_zip  (ID_except_zip),
+     .EX_except_reg  (EX_except_zip),
+-    .counter        (counter)
++    .counter        (counter),
++    .ID_to_EX       (ID_to_EX),
++    .EX_to_MEM      (EX_to_MEM)
+ );
+ 
+ // MEM instance (connect its memory read_data to data_sram_rdata, and drive data_sram_* outputs)
+@@ -186,16 +200,17 @@ MEM u_MEM (
+     .clk            (clk),
+     .rst            (reset),
+     .EX_to_MEM_zip  (EX_to_MEM_reg),
+-    .write_en       (data_sram_en),
+-    .write_we       (data_sram_we),
++    .write_en       (data_sram_req),
++    .write_we       (data_sram_wstrb),
++    .write_size     (data_sram_size),
+     .write_addr     (data_sram_addr),
+     .write_data     (data_sram_wdata),
+     .MEM_to_WB_reg  (MEM_to_WB_reg),
+     .read_data      (data_sram_rdata),
+     .MEM_allowin    (MEM_allowin),
+     .WB_allowin     (WB_allowin),
+-    .data_ready     (data_ready),
+-    .data_valid     (data_valid),
++    .data_sram_addr_ok     (data_sram_addr_ok),
++    .data_sram_data_ok     (data_sram_data_ok),
+     .front_valid    (MEM_front_valid),
+     .front_addr     (MEM_front_addr),
+     .front_data     (MEM_front_data),
+@@ -204,10 +219,9 @@ MEM u_MEM (
+     .done_pc        (done_pc),
+     .flush          (flush),
+     .EX_except_zip  (EX_except_zip),
+-    .MEM_except_reg (MEM_except_zip)
+-    // .load_use_valid (load_use_valid),
+-    // .load_use_addr  (load_use_addr),
+-    // .load_use_data  (load_use_data)
++    .MEM_except_reg (MEM_except_zip),
++    .EX_to_MEM      (EX_to_MEM),
++    .MEM_to_WB      (MEM_to_WB)
+ );
+ 
+ // WB instance
+@@ -232,7 +246,8 @@ WB u_WB (
+     .wb_ex          (wb_ex),
+     .wb_ecode       (wb_ecode),
+     .wb_esubcode    (wb_esubcode),
+-    .wb_vaddr       (wb_vaddr)
++    .wb_vaddr       (wb_vaddr),
++    .MEM_to_WB      (MEM_to_WB)
+ );
+ 
+ // regfile instance
+@@ -274,8 +289,11 @@ assign flush = ertn_flush | wb_ex;
+ assign flush_target = ertn_flush ? csr_era_pc : csr_eentry_data;
+ 
+ // tie-off instruction sram write controls (read-only from CPU)
+-assign inst_sram_we    = 4'b0;
++assign inst_sram_wstrb = 4'b0;
+ assign inst_sram_wdata = 32'b0;
++assign inst_sram_wr    = | inst_sram_wstrb;
++assign inst_sram_size  = 2'b10;
++assign data_sram_wr    = | data_sram_wstrb;
+ 
+ // debug outputs from WB.inst_retire_reg
+ // inst_retire_reg format: { pc(32), {4{rf_wen}}(4), rf_waddr(5), rf_wdata(32) }
+-- 
+2.51.0
+
