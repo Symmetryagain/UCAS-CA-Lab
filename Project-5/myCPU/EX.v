@@ -15,13 +15,32 @@ module EX(
 
         output  wire            EX_allowin,
         output  reg  [144:0]    EX_to_MEM_reg,
-        output  reg  [ 86:0]    EX_except_reg
+        output  reg  [ 86:0]    EX_except_reg,
+        input   wire            ID_to_EX,
+        output  wire            EX_to_MEM
 );
 
-wire            valid;
-assign valid = valid_self & ~flush;
+assign EX_to_MEM = readygo & MEM_allowin;
+reg             at_state;
+always @(posedge clk) begin
+        if (rst) begin 
+                at_state <= 1'b0;
+        end
+        else if (ID_to_EX) begin
+                at_state <= 1'b1;
+        end
+        else if (EX_to_MEM | flush) begin
+                at_state <= 1'b0;
+        end
+        else begin
+                at_state <= at_state;
+        end
+end
 
-wire            valid_self;
+wire            valid;
+assign          valid = ID_to_EX_valid & ~flush;
+
+wire            ID_to_EX_valid;
 wire [31:0]     pc;
 wire [31:0]     IR;
 wire [31:0]     src1;
@@ -66,7 +85,7 @@ assign front_data = compute_result;
 assign EX_allowin = ~valid | readygo & MEM_allowin;
 
 assign  {
-        valid_self, pc, IR, src1, src2, aluop, EX_to_MEM_zip, 
+        ID_to_EX_valid, pc, IR, src1, src2, aluop, EX_to_MEM_zip, 
         inst_mul, inst_mulh, inst_mulhu, inst_div, inst_mod, inst_divu, inst_modu, 
         inst_rdcntvh, inst_rdcntvl
 } = ID_to_EX_zip;

@@ -3,8 +3,8 @@ module MEM(
         input   wire            rst,
         input   wire            WB_allowin,
         
-        input   wire            data_ready,
-        input   wire            data_valid,
+        input   wire            data_sram_addr_ok,
+        input   wire            data_sram_data_ok,
         input   wire [ 31:0]    read_data,
         input   wire [144:0]    EX_to_MEM_zip,
         input   wire [ 86:0]    EX_except_zip,
@@ -24,16 +24,35 @@ module MEM(
         output  wire            MEM_allowin,
         output  wire            write_en,
         output  wire [  3:0]    write_we,
+        output  wire [  1:0]    write_size,
         output  wire [ 31:0]    write_addr,
         output  wire [ 31:0]    write_data,
         output  reg  [102:0]    MEM_to_WB_reg,
-        output  reg  [118:0]    MEM_except_reg
+        output  reg  [118:0]    MEM_except_reg,
+        output  wire            MEM_to_WB
 );
 
-wire            valid;
-assign valid =  valid_self & ~flush;
+assign MEM_to_WB = readygo & WB_allowin;
+reg             at_state;
+always @(posedge clk) begin
+        if (rst) begin 
+                at_state <= 1'b0;
+        end
+        else if (EX_to_MEM) begin
+                at_state <= 1'b1;
+        end
+        else if (MEM_to_WB | flush) begin
+                at_state <= 1'b0;
+        end
+        else begin
+                at_state <= at_state;
+        end
+end
 
-wire            valid_self;
+wire            valid;
+assign valid =  EX_to_MEM_valid & ~flush;
+
+wire            EX_to_MEM_valid;
 wire [31:0]     pc;
 wire [31:0]     IR;
 
@@ -73,13 +92,61 @@ assign front_data = res_from_mem ? rf_wdata_LOAD : alu_result;
 assign MEM_done = readygo;
 assign loaded_data = rf_wdata_LOAD;
 
+reg             init;
+reg             wait_addr_ok;
+reg             wait_data_ok;
 reg             readygo;
 
 always @(posedge clk) begin
-        if (rst) begin
+        if (rst | flush) begin
+                init <= 1'b1;
+        end
+        else if (readygo & WB_allowin) begin
+                init <= 1'b1;
+        end
+        else if (init & valid) begin
+                init <= 1'b0;
+        end
+        else begin
+                init <= init;
+        end
+end
+
+always @(posedge clk) begin
+        if (rst | flush) begin
+                wait_addr_ok <= 1'b0;
+        end
+        else if (init & valid & (res_from_mem | mem_we) & ~except_ale) begin
+                wait_addr_ok <= 1'b1;
+        end
+        else if (wait_addr_ok & data_sram_addr_ok) begin
+                wait_addr_ok <= 1'b0;
+        end
+        else begin
+                wait_addr_ok <= wait_addr_ok;
+        end
+end
+
+always @(posedge clk) begin
+        if (rst | flush) begin
+                wait_data_ok <= 1'b0;
+        end
+        else if (wait_addr_ok & data_sram_addr_ok) begin
+                wait_data_ok <= 1'b1;
+        end
+        else if (wait_data_ok & data_sram_data_ok) begin
+                wait_data_ok <= 1'b0;
+        end
+        else begin
+                wait_data_ok <= wait_data_ok;
+        end
+end
+
+always @(posedge clk) begin
+        if (rst | flush) begin
                 readygo <= 1'b0;
         end
-        else if (~readygo & (data_ready | data_valid) & valid) begin
+        else if (init & valid & (~res_from_mem & ~mem_we | except_ale) | wait_data_ok & data_sram_data_ok) begin
                 readygo <= 1'b1;
         end
         else if (readygo & WB_allowin) begin
@@ -93,7 +160,7 @@ end
 assign MEM_allowin = ~valid | (readygo & WB_allowin);
 
 assign  {
-        valid_self, pc, IR, 
+        EX_to_MEM_valid, pc, IR, 
         inst_ld_b, inst_ld_bu, inst_ld_h, inst_ld_hu, inst_ld_w, 
         inst_st_b, inst_st_h, inst_st_w, 
         mem_we, res_from_mem, gr_we, rkd_value, rf_waddr, alu_result
@@ -123,7 +190,7 @@ assign rf_wdata_LOAD    = inst_ld_b?  rf_wdata_ld_b :
 
 assign rf_wdata         = res_from_mem ? rf_wdata_LOAD : alu_result;
 
-assign write_en         = (mem_we | res_from_mem) & valid & ~except_ale;
+assign write_en         = wait_addr_ok;
 
 assign write_we_st_b    = (write_addr[1:0]==2'b00)? 4'b0001:
                           (write_addr[1:0]==2'b01)? 4'b0010:
@@ -131,12 +198,14 @@ assign write_we_st_b    = (write_addr[1:0]==2'b00)? 4'b0001:
                           4'b1000;
 assign write_we_st_h    = (write_addr[1:0]==2'b00)? 4'b0011:
                           4'b1100;                          
-assign write_we         = {4{valid & ~except_ale}} & 
-                          (inst_st_b? {write_we_st_b}:
+assign write_we         = {4{wait_addr_ok}} & 
+                          (inst_st_b? write_we_st_b:
                           inst_st_h? write_we_st_h:
                           inst_st_w? 4'b1111:
                           4'b0000);
-                  
+
+assign write_size       = {(inst_ld_w | inst_st_w), (inst_ld_h | inst_ld_hu | inst_st_h)};
+                        
 assign write_addr       = alu_result;
 assign write_data       = inst_st_b? {4{rkd_value[7:0]}}:
                           inst_st_h? {2{rkd_value[15:0]}}:
@@ -147,7 +216,7 @@ always @(posedge clk) begin
                 MEM_to_WB_reg <= 103'b0;
         end
         else if (readygo & WB_allowin) begin
-                MEM_to_WB_reg <= {valid & ~rst, pc, IR, gr_we, rf_waddr, rf_wdata};
+                MEM_to_WB_reg <= {valid, pc, IR, gr_we, rf_waddr, rf_wdata};
         end
         else if (~readygo & WB_allowin) begin
                 MEM_to_WB_reg <= 103'b0;

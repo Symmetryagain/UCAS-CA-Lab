@@ -1,8 +1,8 @@
 module IF (
         input   wire            clk,
         input   wire            rst,
-        input   wire            inst_sram_addr_ok,
-        input   wire            inst_sram_data_ok,
+        input   wire            inst_ready,
+        input   wire            inst_valid,
 
         input   wire            ID_allowin,
 
@@ -14,14 +14,23 @@ module IF (
         input   wire            flush,
         input   wire [31:0]     flush_target,
         
+        output  wire            if_to_id_valid,
         output  wire            inst_sram_en,
-        output  reg  [31:0]     pc,
-        output  reg  [66:0]     IF_to_ID_reg
+        output  wire [31:0]     pc_next,
+        output  reg  [65:0]     IF_to_ID_reg
 );
 
-`define PC_INIT 32'h1c000000
+`define PC_INIT 32'h1bfffffc
 
-assign inst_sram_en = wait_addr_ok;
+assign inst_sram_en = ~rst & ID_allowin;
+
+reg             valid;
+always @(posedge clk) begin
+    valid <= ~rst;
+end
+
+assign if_to_id_valid = valid & ~flush;
+
 
 wire            predict;
 // wire            br_taken;
@@ -57,48 +66,20 @@ assign predict          = 1'b0;
 
 // decoder_6_64 u_dec0(.in(op_31_26), .out(op_31_26_d));
 
+reg  [31:0]     pc;
 reg  [31:0]     IR;
-reg             lock;
-reg             wait_addr_ok;
-reg             wait_data_ok;
-reg             readygo;
 
-wire [31:0]     pc_next;
-assign pc_next = flush ? flush_target : 
-                 ID_flush ? ID_flush_target : 
-                 lock ? last_target : pc + 4;
+assign pc_next = flush ? flush_target: ID_flush ? ID_flush_target : pc + 4;
 
-wire            except_adef;
+wire except_adef;
+
 assign except_adef = (|pc[1:0]);
-
-wire            g_flush;
-assign g_flush = flush | ID_flush;
-
-reg  [31:0]     last_target;
-always @(posedge clk) begin
-        if (rst) begin
-                last_target <= 32'b0;
-        end
-        else if (g_flush) begin
-                last_target <= flush ? flush_target : ID_flush_target;
-        end
-        else begin
-                last_target <= last_target;
-        end
-end
-
-wire            nxt_is_wait_addr_ok;
-assign nxt_is_wait_addr_ok = wait_addr_ok & g_flush & inst_sram_addr_ok 
-                           | wait_data_ok & g_flush 
-                           | readygo & g_flush 
-                           | readygo & ID_allowin 
-                           | lock & inst_sram_addr_ok;
 
 always @(posedge clk) begin
         if (rst) begin
                 pc <= `PC_INIT;
         end
-        else if (nxt_is_wait_addr_ok) begin 
+        else if (ID_allowin) begin 
                 pc <= pc_next;
         end 
         else begin
@@ -108,69 +89,9 @@ end
 
 always @(posedge clk) begin
         if (rst) begin
-                wait_addr_ok <= 1'b1;
-        end
-        else if (nxt_is_wait_addr_ok) begin
-                wait_addr_ok <= 1'b1;
-        end
-        else if (wait_addr_ok & inst_sram_addr_ok | wait_addr_ok & g_flush & ~inst_sram_addr_ok) begin
-                wait_addr_ok <= 1'b0;
-        end
-        else begin
-                wait_addr_ok <= wait_addr_ok;
-        end
-end
-
-always @(posedge clk) begin
-        if (rst | g_flush) begin
-                wait_data_ok <= 1'b0;
-        end
-        else if (wait_addr_ok & inst_sram_addr_ok) begin
-                wait_data_ok <= 1'b1;
-        end
-        else if (wait_data_ok & inst_sram_data_ok) begin
-                wait_data_ok <= 1'b0;
-        end
-        else begin
-                wait_data_ok <= wait_data_ok;
-        end
-end
-
-always @(posedge clk) begin
-        if (rst | g_flush) begin
-                readygo <= 1'b0;
-        end
-        else if (wait_data_ok & inst_sram_data_ok) begin
-                readygo <= 1'b1;
-        end
-        else if (readygo & ID_allowin) begin
-                readygo <= 1'b0;
-        end
-        else begin
-                readygo <= readygo;
-        end
-end
-
-always @(posedge clk) begin
-        if (rst) begin
-                lock <= 1'b0;
-        end
-        else if (wait_addr_ok & g_flush & ~inst_sram_addr_ok) begin
-                lock <= 1'b1;
-        end
-        else if (lock & inst_sram_addr_ok) begin 
-                lock <= 1'b0;
-        end
-        else begin
-                lock <= lock;
-        end
-end
-
-always @(posedge clk) begin
-        if (rst) begin
                 IR <= 32'b0;
         end
-        else if (wait_data_ok & inst_sram_data_ok) begin
+        else if (ID_allowin) begin
                 IR <= inst;
         end
         else begin
@@ -180,10 +101,13 @@ end
 
 always @(posedge clk) begin
         if (rst) begin
-                IF_to_ID_reg <= {1'b0, 1'b0, 32'b0, `PC_INIT, 1'b0};
+                IF_to_ID_reg <= {1'b0, 32'b0, `PC_INIT, 1'b0};
         end
-        else if (readygo & ID_allowin) begin
-                IF_to_ID_reg <= {~g_flush, predict, IR, pc, except_adef};
+        // else if(flush)begin
+        //         IF_to_ID_reg <= {predict, ,pc};
+        // end
+        else if (ID_allowin) begin
+                IF_to_ID_reg <= {predict, inst, pc, except_adef};
         end else begin
                 IF_to_ID_reg <= IF_to_ID_reg;
         end

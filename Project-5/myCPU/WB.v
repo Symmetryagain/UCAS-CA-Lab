@@ -24,7 +24,8 @@ module WB(
         output  wire [31:0]     wb_pc,
         output  wire [ 5:0]     wb_ecode,
         output  wire [ 8:0]     wb_esubcode,
-        output  wire [31:0]     wb_vaddr
+        output  wire [31:0]     wb_vaddr,
+        input   wire            MEM_to_WB
 );
 
 wire            valid;
