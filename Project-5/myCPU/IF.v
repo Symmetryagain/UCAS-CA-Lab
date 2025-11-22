@@ -3,31 +3,29 @@
 module IF (
         input   wire            clk,
         input   wire            rst,
-        input   wire            inst_sram_addr_ok,
-        input   wire            inst_sram_data_ok,
-
-        input   wire            ID_allowin,
-
-        input   wire [31:0]     inst,
-
-        input   wire            ID_flush,
-        input   wire [31:0]     ID_flush_target,
-
-        input   wire            flush,
-        input   wire [31:0]     flush_target,
-        
+        // IF <-> inst_sram interface
         output  wire            inst_sram_en,
         output  reg  [31:0]     pc,
+        input   wire            inst_sram_addr_ok,
+        input   wire            inst_sram_data_ok,
+        input   wire [31:0]     inst,
+        // IF <- ID interface
+        input   wire            ID_allowin,
+        input   wire            ID_flush,
+        input   wire [31:0]     ID_flush_target,
+        // IF -> ID interface
         output  reg  [66:0]     IF_to_ID_reg,
-
-        output  wire            IF_to_ID
+        output  wire            IF_to_ID,
+        // output  wire [66:0]     IF_to_ID_zip,
+        // IF <- top interface
+        input   wire            flush,
+        input   wire [31:0]     flush_target
 );
 
-
-assign IF_to_ID = readygo & ID_allowin;
-
-assign inst_sram_en = wait_addr_ok | lock_addr;
-
+wire [31:0]     pc_next;
+wire            except_adef;
+wire            g_flush;
+wire            nxt_is_wait_addr_ok;
 wire            predict;
 // wire            br_taken;
 // wire [31:0]     br_target;
@@ -43,44 +41,43 @@ wire            predict;
 // wire [15:0]     i16;
 // wire [25:0]     i26;
 
-// assign op_31_26         = inst[31:26];
-// assign inst_jirl        = op_31_26_d[6'h13];
-// assign inst_b           = op_31_26_d[6'h14];
-// assign inst_bl          = op_31_26_d[6'h15];
-// assign inst_beq         = op_31_26_d[6'h16];
-// assign inst_bne         = op_31_26_d[6'h17];
-
-// assign need_si26        = inst_b | inst_bl;
-// assign i16              = inst[25:10];
-// assign i26              = {inst[ 9: 0], inst[25:10]};
-// assign br_offs          = need_si26 ? {{ 4{i26[25]}}, i26[25:0], 2'b0}:
-//                                       {{14{i16[15]}}, i16[15:0], 2'b0};
-
-assign predict          = 1'b0;
-// assign br_taken         = inst_beq & predict | inst_bne & predict | inst_bl | inst_b | inst_jirl;
-// assign br_target        = pc_reg + br_offs;
-
-// decoder_6_64 u_dec0(.in(op_31_26), .out(op_31_26_d));
-
 reg  [31:0]     IR;
 reg             lock_addr;
 reg             lock_data;
 reg             wait_addr_ok;
 reg             wait_data_ok;
 reg             readygo;
+reg  [31:0]     last_target;
 
-wire [31:0]     pc_next;
+assign IF_to_ID = readygo & ID_allowin;
+// assign IF_to_ID_zip = {~g_flush, predict, IR, pc, except_adef};
+assign inst_sram_en = wait_addr_ok | lock_addr;
 assign pc_next = flush ? flush_target : 
                  ID_flush ? ID_flush_target : 
                  lock_data ? last_target : pc + 4;
-
-wire            except_adef;
 assign except_adef = (|pc[1:0]);
-
-wire            g_flush;
 assign g_flush = flush | ID_flush;
+assign predict          = 1'b0;
+assign nxt_is_wait_addr_ok = wait_data_ok & g_flush & inst_sram_data_ok
+                           | readygo & g_flush 
+                           | readygo & ID_allowin 
+                           | lock_data & inst_sram_data_ok;
+// assign op_31_26         = inst[31:26];
+// assign inst_jirl        = op_31_26_d[6'h13];
+// assign inst_b           = op_31_26_d[6'h14];
+// assign inst_bl          = op_31_26_d[6'h15];
+// assign inst_beq         = op_31_26_d[6'h16];
+// assign inst_bne         = op_31_26_d[6'h17];
+// assign need_si26        = inst_b | inst_bl;
+// assign i16              = inst[25:10];
+// assign i26              = {inst[ 9: 0], inst[25:10]};
+// assign br_offs          = need_si26 ? {{ 4{i26[25]}}, i26[25:0], 2'b0}:
+//                                       {{14{i16[15]}}, i16[15:0], 2'b0};
+// assign br_taken         = inst_beq & predict | inst_bne & predict | inst_bl | inst_b | inst_jirl;
+// assign br_target        = pc_reg + br_offs;
 
-reg  [31:0]     last_target;
+// decoder_6_64 u_dec0(.in(op_31_26), .out(op_31_26_d));
+
 always @(posedge clk) begin
         if (rst) begin
                 last_target <= 32'b0;
@@ -92,12 +89,6 @@ always @(posedge clk) begin
                 last_target <= last_target;
         end
 end
-
-wire            nxt_is_wait_addr_ok;
-assign nxt_is_wait_addr_ok = wait_data_ok & g_flush & inst_sram_data_ok
-                           | readygo & g_flush 
-                           | readygo & ID_allowin 
-                           | lock_data & inst_sram_data_ok;
 
 always @(posedge clk) begin
         if (rst) begin

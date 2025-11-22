@@ -4,8 +4,15 @@ module ID(
         input   wire            clk,
         input   wire            rst,
         input   wire            EX_allowin,
+        // ID <- IF interface
+        input   wire            IF_to_ID,
         input   wire [ 66:0]    IF_to_ID_zip,
+        // ID <-> top interface
         input   wire            flush,
+        output  wire [  4:0]    rf_raddr1,
+        output  wire [  4:0]    rf_raddr2,
+        input   wire [ 31:0]    rf_rdata1,
+        input   wire [ 31:0]    rf_rdata2,
 
         input   wire            mem_done,
         input   wire [ 31:0]    done_pc,
@@ -18,19 +25,13 @@ module ID(
         input   wire [  4:0]    front_from_MEM_addr,
         input   wire [ 31:0]    front_from_MEM_data,
 
-        input   wire [ 31:0]    rf_rdata1,
-        input   wire [ 31:0]    rf_rdata2,
-
         output  wire            ID_allowin,
-        output  wire [  4:0]    rf_raddr1,
-        output  wire [  4:0]    rf_raddr2,
         input   wire            has_int,
         output  wire            ID_flush,
         output  wire [ 31:0]    ID_flush_target,
         output  reg  [197:0]    ID_to_EX_reg,
         output  reg  [ 85:0]    ID_except_reg,
 
-        input   wire            IF_to_ID,
         output  wire            ID_to_EX
 );
 
@@ -271,9 +272,11 @@ wire [13:0]     csr_num;
 wire            csr_we;
 wire [31:0]     csr_wmask;
 wire [31:0]     csr_wvalue;
-wire  [5:0]     csr_ecode;
-wire  [8:0]     csr_esubcode;
 
+wire            except_sys;
+wire            except_brk;
+wire            except_ine;
+wire            except_int;
 
 assign op_31_26 = inst[31:26];
 assign op_25_22 = inst[25:22];
@@ -366,7 +369,7 @@ assign  alu_op[10]      = inst_srai_w | inst_sra;
 assign  alu_op[11]      = inst_lu12i_w;
 
 assign  need_ui5        =  inst_slli_w | inst_srli_w | inst_srai_w;
-assign  need_ui12       =  inst_andi | inst_ori | inst_xori;//
+assign  need_ui12       =  inst_andi | inst_ori | inst_xori;
 assign  need_si12       =  inst_addi_w | inst_ld_w | inst_st_w 
                          | inst_ld_b | inst_ld_bu |inst_ld_h | inst_ld_hu | inst_st_b | inst_st_h
                          | inst_slti | inst_sltui;
@@ -455,19 +458,6 @@ assign csr_we       = inst_csrwr | inst_csrxchg;
 assign csr_wmask    = {32{inst_csrxchg}} & rj_value | {32{inst_csrwr}};
 assign csr_wvalue   = rkd_value;
 assign csr_num      = inst_rdcntid ? `CSR_TID : inst[23:10];
-wire   except_sys;
-wire   except_brk;
-wire   except_ine;
-wire   except_int;
-
-/*assign csr_ecode    =  except_sys?  `ECODE_SYS:
-                       except_adef? `ECODE_ADE:
-                       except_ale?  `ECODE_ALE: 
-                       except_brk?  `ECODE_BRK:
-                       except_ine?  `ECODE_INE:
-                       except_int?  `ECODE_INT:
-                       6'b0;
-assign csr_esubcode = inst_syscall ? `ESUBCODE_NONE : 9'd0;*/
 
 assign except_sys  = inst_syscall;
 assign except_brk  = inst_break;
@@ -514,7 +504,6 @@ always @(posedge clk) begin
                 ID_except_reg  <= {
                         csr_re, csr_we, csr_wmask, csr_wvalue, csr_num, 
                         inst_ertn, except_sys, except_adef, except_brk, except_ine, except_int
-                        //csr_ecode, csr_esubcode
                 };
         end
         else if (EX_allowin & ~readygo) begin
