@@ -3,36 +3,39 @@
 module ID(
         input   wire            clk,
         input   wire            rst,
-        input   wire            EX_allowin,
-        // ID <- IF interface
+        // ID -> IF
+        output  wire            ID_allowin,
+        output  wire            ID_flush,
+        output  wire [ 31:0]    ID_flush_target,
+        // IF -> ID
         input   wire            IF_to_ID,
         input   wire [ 66:0]    IF_to_ID_zip,
-        // ID <-> top interface
-        input   wire            flush,
+        // ID -> top
         output  wire [  4:0]    rf_raddr1,
         output  wire [  4:0]    rf_raddr2,
+        // top -> ID
+        input   wire            flush,
         input   wire [ 31:0]    rf_rdata1,
         input   wire [ 31:0]    rf_rdata2,
-
-        input   wire            mem_done,
-        input   wire [ 31:0]    done_pc,
-        input   wire [ 31:0]    last_load_data,
-
+        input   wire            has_int,
+        // ID -> EX
+        output  wire            ID_to_EX,
+        // output  reg  [197:0]    ID_to_EX_reg,
+        // output  reg  [ 85:0]    ID_except_reg,
+        output  wire [197:0]    ID_to_EX_zip,
+        output  wire [ 85:0]    ID_except_zip,
+        // EX -> ID
+        input   wire            EX_allowin,
         input   wire            front_from_EX_valid,
         input   wire [  4:0]    front_from_EX_addr,
         input   wire [ 31:0]    front_from_EX_data,
+        // MEM -> ID
+        input   wire            mem_done,
+        input   wire [ 31:0]    done_pc,
+        input   wire [ 31:0]    last_load_data,
         input   wire            front_from_MEM_valid,
         input   wire [  4:0]    front_from_MEM_addr,
-        input   wire [ 31:0]    front_from_MEM_data,
-
-        output  wire            ID_allowin,
-        input   wire            has_int,
-        output  wire            ID_flush,
-        output  wire [ 31:0]    ID_flush_target,
-        output  reg  [197:0]    ID_to_EX_reg,
-        output  reg  [ 85:0]    ID_except_reg,
-
-        output  wire            ID_to_EX
+        input   wire [ 31:0]    front_from_MEM_data
 );
 
 assign ID_to_EX = readygo & EX_allowin;
@@ -152,6 +155,19 @@ assign readygo = (~need_pause | need_pause & last_mem_done)
                 & ~(last_is_csr & timer_cnt[0]) 
                 & at_state;
 
+reg  [66:0]     IF_to_ID_reg;
+always @(posedge clk) begin
+        if (rst) begin
+                IF_to_ID_reg <= 67'b0;
+        end
+        else if (IF_to_ID) begin
+                IF_to_ID_reg <= IF_to_ID_zip;
+        end
+        else begin
+                IF_to_ID_reg <= IF_to_ID_reg;
+        end
+end
+
 wire            IF_to_ID_valid;
 wire            predict;
 wire [31:0]     pc;
@@ -159,7 +175,7 @@ wire [31:0]     inst;
 wire            except_adef;
 assign {
         IF_to_ID_valid, predict, inst, pc, except_adef
-} = IF_to_ID_zip;
+} = IF_to_ID_reg;
 
 wire [11:0]     alu_op;
 wire            load_op;
@@ -470,49 +486,67 @@ assign except_ine  = ~(inst_add_w | inst_sub_w | inst_slt | inst_sltu | inst_nor
                 inst_csrrd | inst_csrwr | inst_csrxchg | inst_ertn | inst_syscall | inst_break | inst_rdcntid | inst_rdcntvl | inst_rdcntvh) & valid;
 assign except_int  = has_int;
 
-always @(posedge clk) begin
-        if (rst) begin
-                ID_to_EX_reg <= 198'b0;
-        end
-        else if (EX_allowin & readygo) begin
-                ID_to_EX_reg <= {
-                        valid, 
-                        pc, inst,
-                        src1_is_pc ? pc : rj_value,
-                        src2_is_imm ? imm : rkd_value,
-                        alu_op, 
-                        inst_ld_b, inst_ld_bu, inst_ld_h, inst_ld_hu, inst_ld_w, 
-                        inst_st_b, inst_st_h, inst_st_w, 
-                        mem_we, res_from_mem, gr_we, rkd_value, dest,
-                        inst_mul, inst_mulh, inst_mulhu, inst_div, inst_mod, inst_divu, inst_modu, 
-                        inst_rdcntvh, inst_rdcntvl
-                };
-        end
-        else if (EX_allowin & ~readygo) begin
-                ID_to_EX_reg <= 198'b0;
-        end
-        else begin
-                ID_to_EX_reg <= ID_to_EX_reg;
-        end
-end
+assign ID_to_EX_zip = {
+        valid, 
+        pc, inst,
+        src1_is_pc ? pc : rj_value,
+        src2_is_imm ? imm : rkd_value,
+        alu_op, 
+        inst_ld_b, inst_ld_bu, inst_ld_h, inst_ld_hu, inst_ld_w, 
+        inst_st_b, inst_st_h, inst_st_w, 
+        mem_we, res_from_mem, gr_we, rkd_value, dest,
+        inst_mul, inst_mulh, inst_mulhu, inst_div, inst_mod, inst_divu, inst_modu, 
+        inst_rdcntvh, inst_rdcntvl
+};
 
-always @(posedge clk) begin
-        if (rst) begin
-                ID_except_reg <= 86'b0;
-        end
-        else if (EX_allowin & readygo) begin
-                ID_except_reg  <= {
-                        csr_re, csr_we, csr_wmask, csr_wvalue, csr_num, 
-                        inst_ertn, except_sys, except_adef, except_brk, except_ine, except_int
-                };
-        end
-        else if (EX_allowin & ~readygo) begin
-                ID_except_reg <= 86'b0;
-        end
-        else begin
-                ID_except_reg <= ID_except_reg;
-        end
-end
+assign ID_except_zip = {
+        csr_re, csr_we, csr_wmask, csr_wvalue, csr_num, 
+        inst_ertn, except_sys, except_adef, except_brk, except_ine, except_int
+};
+
+// always @(posedge clk) begin
+//         if (rst) begin
+//                 ID_to_EX_reg <= 198'b0;
+//         end
+//         else if (EX_allowin & readygo) begin
+//                 ID_to_EX_reg <= {
+//                         valid, 
+//                         pc, inst,
+//                         src1_is_pc ? pc : rj_value,
+//                         src2_is_imm ? imm : rkd_value,
+//                         alu_op, 
+//                         inst_ld_b, inst_ld_bu, inst_ld_h, inst_ld_hu, inst_ld_w, 
+//                         inst_st_b, inst_st_h, inst_st_w, 
+//                         mem_we, res_from_mem, gr_we, rkd_value, dest,
+//                         inst_mul, inst_mulh, inst_mulhu, inst_div, inst_mod, inst_divu, inst_modu, 
+//                         inst_rdcntvh, inst_rdcntvl
+//                 };
+//         end
+//         else if (EX_allowin & ~readygo) begin
+//                 ID_to_EX_reg <= 198'b0;
+//         end
+//         else begin
+//                 ID_to_EX_reg <= ID_to_EX_reg;
+//         end
+// end
+
+// always @(posedge clk) begin
+//         if (rst) begin
+//                 ID_except_reg <= 86'b0;
+//         end
+//         else if (EX_allowin & readygo) begin
+//                 ID_except_reg  <= {
+//                         csr_re, csr_we, csr_wmask, csr_wvalue, csr_num, 
+//                         inst_ertn, except_sys, except_adef, except_brk, except_ine, except_int
+//                 };
+//         end
+//         else if (EX_allowin & ~readygo) begin
+//                 ID_except_reg <= 86'b0;
+//         end
+//         else begin
+//                 ID_except_reg <= ID_except_reg;
+//         end
+// end
 
 
 assign ID_flush_target = br_target;

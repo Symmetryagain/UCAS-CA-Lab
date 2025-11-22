@@ -1,26 +1,54 @@
 module EX(
         input   wire            clk,
         input   wire            rst,
-        input   wire            MEM_allowin,
-        input   wire [197:0]    ID_to_EX_zip,
-        input   wire [ 85:0]    ID_except_zip,
-
-        input   wire            flush,
-
+        // EX -> ID
         output  wire            front_valid,
         output  wire [  4:0]    front_addr,
         output  wire [ 31:0]    front_data,
-
-        input   wire [ 63:0]    counter,
-
         output  wire            EX_allowin,
+        // ID -> EX
+        input   wire            ID_to_EX,
+        input   wire [197:0]    ID_to_EX_zip,
+        input   wire [ 85:0]    ID_except_zip,
+        // EX -> MEM
+        output  wire            EX_to_MEM,
         output  reg  [144:0]    EX_to_MEM_reg,
         output  reg  [ 86:0]    EX_except_reg,
-        input   wire            ID_to_EX,
-        output  wire            EX_to_MEM
+        // MEM -> EX
+        input   wire            MEM_allowin,
+        // top -> EX
+        input   wire            flush,
+        input   wire [ 63:0]    counter
 );
 
 assign EX_to_MEM = readygo & MEM_allowin;
+
+reg  [197:0]    ID_to_EX_reg;
+always @(posedge clk) begin
+        if (rst) begin
+                ID_to_EX_reg <= 198'b0;
+        end
+        else if (ID_to_EX) begin
+                ID_to_EX_reg <= ID_to_EX_zip;
+        end
+        else begin
+                ID_to_EX_reg <= ID_to_EX_reg;
+        end
+end
+
+reg  [85:0]     ID_except_reg;
+always @(posedge clk) begin
+        if (rst) begin
+                ID_except_reg <= 86'b0;
+        end
+        else if (ID_to_EX) begin
+                ID_except_reg <= ID_except_zip;
+        end
+        else begin
+                ID_except_reg <= ID_except_zip;
+        end
+end
+
 reg             at_state;
 always @(posedge clk) begin
         if (rst | flush) begin 
@@ -88,7 +116,7 @@ assign  {
         ID_to_EX_valid, pc, IR, src1, src2, aluop, EX_to_MEM_zip, 
         inst_mul, inst_mulh, inst_mulhu, inst_div, inst_mod, inst_divu, inst_modu, 
         inst_rdcntvh, inst_rdcntvl
-} = ID_to_EX_zip;
+} = ID_to_EX_reg;
 
 assign {
         inst_ld_b, inst_ld_bu, inst_ld_h, inst_ld_hu, inst_ld_w, 
@@ -267,7 +295,7 @@ always @(posedge clk) begin
                 EX_except_reg <= 87'b0;
         end
         else if (readygo & MEM_allowin) begin
-                EX_except_reg <= {ID_except_zip, except_ale};
+                EX_except_reg <= {ID_except_reg, except_ale};
         end
         else if (~readygo & MEM_allowin) begin
                 EX_except_reg <= 87'b0;

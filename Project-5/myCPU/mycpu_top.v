@@ -50,8 +50,8 @@ wire            MEM_allowin;
 wire            WB_allowin;
 
 // internal pipeline zipes
-wire [66:0]     IF_to_ID_reg;
-wire [197:0]    ID_to_EX_reg;
+wire [66:0]     IF_to_ID_zip;
+wire [197:0]    ID_to_EX_zip;
 wire [144:0]    EX_to_MEM_reg;
 wire [102:0]    MEM_to_WB_reg;
 
@@ -124,7 +124,7 @@ IF u_IF (
     .inst           (inst_sram_rdata),
     .ID_flush_target(ID_pc_real),
     .pc             (inst_sram_addr),
-    .IF_to_ID_reg   (IF_to_ID_reg),
+    .IF_to_ID_zip   (IF_to_ID_zip),
     .ID_allowin     (ID_allowin),
     .inst_sram_addr_ok     (inst_sram_addr_ok),
     .inst_sram_data_ok     (inst_sram_data_ok),
@@ -138,7 +138,7 @@ IF u_IF (
 ID u_ID (
     .clk            (clk),
     .rst            (reset),
-    .IF_to_ID_zip   (IF_to_ID_reg),
+    .IF_to_ID_zip   (IF_to_ID_zip),
     .front_from_EX_valid (EX_front_valid),
     .front_from_EX_addr  (EX_front_addr),
     .front_from_EX_data  (EX_front_data),
@@ -154,12 +154,12 @@ ID u_ID (
     .has_int        (has_int),
     .ID_flush       (ID_flush),
     .ID_flush_target(ID_pc_real),
-    .ID_to_EX_reg   (ID_to_EX_reg),
+    .ID_to_EX_zip   (ID_to_EX_zip),
     .ID_allowin     (ID_allowin),
     .EX_allowin     (EX_allowin),
     .done_pc        (done_pc),
     .flush          (flush),
-    .ID_except_reg  (ID_except_zip),
+    .ID_except_zip  (ID_except_zip),
     .IF_to_ID       (IF_to_ID),
     .ID_to_EX       (ID_to_EX)
 );
@@ -167,7 +167,7 @@ ID u_ID (
 EX u_EX (
     .clk            (clk),
     .rst            (reset),
-    .ID_to_EX_zip   (ID_to_EX_reg),
+    .ID_to_EX_zip   (ID_to_EX_zip),
     .EX_to_MEM_reg  (EX_to_MEM_reg),
     .EX_allowin     (EX_allowin),
     .MEM_allowin    (MEM_allowin),

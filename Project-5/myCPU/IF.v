@@ -3,23 +3,25 @@
 module IF (
         input   wire            clk,
         input   wire            rst,
-        // IF <-> inst_sram interface
+        // IF -> top
         output  wire            inst_sram_en,
         output  reg  [31:0]     pc,
+        // top -> IF
+        /// inst_sram
         input   wire            inst_sram_addr_ok,
         input   wire            inst_sram_data_ok,
         input   wire [31:0]     inst,
-        // IF <- ID interface
+        /// flush
+        input   wire            flush,
+        input   wire [31:0]     flush_target,
+        // IF -> ID
+        // output  reg  [66:0]     IF_to_ID_reg,
+        output  wire            IF_to_ID,
+        output  wire [66:0]     IF_to_ID_zip,
+        // ID -> IF
         input   wire            ID_allowin,
         input   wire            ID_flush,
-        input   wire [31:0]     ID_flush_target,
-        // IF -> ID interface
-        output  reg  [66:0]     IF_to_ID_reg,
-        output  wire            IF_to_ID,
-        // output  wire [66:0]     IF_to_ID_zip,
-        // IF <- top interface
-        input   wire            flush,
-        input   wire [31:0]     flush_target
+        input   wire [31:0]     ID_flush_target
 );
 
 wire [31:0]     pc_next;
@@ -50,7 +52,7 @@ reg             readygo;
 reg  [31:0]     last_target;
 
 assign IF_to_ID = readygo & ID_allowin;
-// assign IF_to_ID_zip = {~g_flush, predict, IR, pc, except_adef};
+assign IF_to_ID_zip = {~g_flush, predict, IR, pc, except_adef};
 assign inst_sram_en = wait_addr_ok | lock_addr;
 assign pc_next = flush ? flush_target : 
                  ID_flush ? ID_flush_target : 
@@ -189,15 +191,15 @@ always @(posedge clk) begin
         end
 end
 
-always @(posedge clk) begin
-        if (rst) begin
-                IF_to_ID_reg <= 67'b0;
-        end
-        else if (readygo & ID_allowin) begin
-                IF_to_ID_reg <= {~g_flush, predict, IR, pc, except_adef};
-        end else begin
-                IF_to_ID_reg <= IF_to_ID_reg;
-        end
-end
+// always @(posedge clk) begin
+//         if (rst) begin
+//                 IF_to_ID_reg <= 67'b0;
+//         end
+//         else if (readygo & ID_allowin) begin
+//                 IF_to_ID_reg <= {~g_flush, predict, IR, pc, except_adef};
+//         end else begin
+//                 IF_to_ID_reg <= IF_to_ID_reg;
+//         end
+// end
 
 endmodule
