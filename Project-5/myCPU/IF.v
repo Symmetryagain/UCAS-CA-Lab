@@ -191,15 +191,4 @@ always @(posedge clk) begin
         end
 end
 
-// always @(posedge clk) begin
-//         if (rst) begin
-//                 IF_to_ID_reg <= 67'b0;
-//         end
-//         else if (readygo & ID_allowin) begin
-//                 IF_to_ID_reg <= {~g_flush, predict, IR, pc, except_adef};
-//         end else begin
-//                 IF_to_ID_reg <= IF_to_ID_reg;
-//         end
-// end
-
 endmodule

@@ -6,14 +6,16 @@ module EX(
         output  wire [  4:0]    front_addr,
         output  wire [ 31:0]    front_data,
         output  wire            EX_allowin,
+        output  wire            EX_is_csr,
+        output  wire            EX_is_load,
         // ID -> EX
         input   wire            ID_to_EX,
-        input   wire [197:0]    ID_to_EX_zip,
+        input   wire [198:0]    ID_to_EX_zip,
         input   wire [ 85:0]    ID_except_zip,
         // EX -> MEM
         output  wire            EX_to_MEM,
-        output  reg  [144:0]    EX_to_MEM_reg,
-        output  reg  [ 86:0]    EX_except_reg,
+        output  wire [145:0]    EX_to_MEM_zip,
+        output  wire [ 86:0]    EX_except_zip,
         // MEM -> EX
         input   wire            MEM_allowin,
         // top -> EX
@@ -21,12 +23,15 @@ module EX(
         input   wire [ 63:0]    counter
 );
 
+wire            valid;
+assign valid = ID_to_EX_valid & at_state & ~flush;
+
 assign EX_to_MEM = readygo & MEM_allowin;
 
-reg  [197:0]    ID_to_EX_reg;
+reg  [198:0]    ID_to_EX_reg;
 always @(posedge clk) begin
         if (rst) begin
-                ID_to_EX_reg <= 198'b0;
+                ID_to_EX_reg <= 199'b0;
         end
         else if (ID_to_EX) begin
                 ID_to_EX_reg <= ID_to_EX_zip;
@@ -45,7 +50,7 @@ always @(posedge clk) begin
                 ID_except_reg <= ID_except_zip;
         end
         else begin
-                ID_except_reg <= ID_except_zip;
+                ID_except_reg <= ID_except_reg;
         end
 end
 
@@ -65,16 +70,12 @@ always @(posedge clk) begin
         end
 end
 
-wire            valid;
-assign valid = ID_to_EX_valid & at_state & ~flush;
-
 wire            ID_to_EX_valid;
 wire [31:0]     pc;
 wire [31:0]     IR;
 wire [31:0]     src1;
 wire [31:0]     src2;
 wire [11:0]     aluop;
-wire [47:0]     EX_to_MEM_zip;
 
 wire            inst_ld_w;
 wire            inst_ld_b;
@@ -102,28 +103,28 @@ wire            inst_ertn;
 wire            except_ale;
 wire            inst_rdcntvh;
 wire            inst_rdcntvl;
+wire            is_csr;
 
-assign except_ale = (|alu_result[1:0]) & (inst_st_w | inst_ld_w) |
-     alu_result[0] & (inst_st_h | inst_ld_h | inst_ld_hu);
+assign except_ale = (|alu_result[1:0]) & (inst_st_w | inst_ld_w) 
+                  | alu_result[0] & (inst_st_h | inst_ld_h | inst_ld_hu);
 
-assign front_valid = ~res_from_mem & gr_we;
+assign front_valid = valid & ~res_from_mem & gr_we;
 assign front_addr = rf_waddr;
 assign front_data = compute_result;
 
 assign EX_allowin = ~valid | readygo & MEM_allowin;
 
 assign  {
-        ID_to_EX_valid, pc, IR, src1, src2, aluop, EX_to_MEM_zip, 
-        inst_mul, inst_mulh, inst_mulhu, inst_div, inst_mod, inst_divu, inst_modu, 
-        inst_rdcntvh, inst_rdcntvl
-} = ID_to_EX_reg;
-
-assign {
+        ID_to_EX_valid, pc, IR, src1, src2, aluop,
         inst_ld_b, inst_ld_bu, inst_ld_h, inst_ld_hu, inst_ld_w, 
         inst_st_b, inst_st_h, inst_st_w,
-        mem_we, res_from_mem, gr_we, rkd_value, rf_waddr
-} = EX_to_MEM_zip;
+        mem_we, res_from_mem, gr_we, rkd_value, rf_waddr,
+        inst_mul, inst_mulh, inst_mulhu, inst_div, inst_mod, inst_divu, inst_modu, 
+        inst_rdcntvh, inst_rdcntvl, is_csr
+} = ID_to_EX_reg;
 
+assign EX_is_csr = valid & is_csr;
+assign EX_is_load = valid & res_from_mem;
 
 wire [31:0]     alu_result;
 wire [31:0]     compute_result;
@@ -216,10 +217,10 @@ unsigned_div unsigned_div (
 );
 
 always @(posedge clk) begin
-        if (rst) begin
+        if (rst | flush) begin
                 init <= 1'b1;
         end
-        else if (readygo & MEM_allowin & ~flush) begin
+        else if (readygo & MEM_allowin) begin
                 init <= 1'b1;
         end
         else if (init & valid) begin
@@ -261,10 +262,10 @@ always @(posedge clk) begin
 end
 
 always @(posedge clk) begin
-        if (rst) begin
+        if (rst | flush) begin
                 readygo <= 1'b0;
         end
-        else if (init & valid & ~div_or_udiv | wait_res_valid & res_valid | flush) begin
+        else if (init & valid & ~div_or_udiv | wait_res_valid & res_valid) begin
                 readygo <= 1'b1;
         end
         else if (readygo & MEM_allowin) begin
@@ -275,34 +276,14 @@ always @(posedge clk) begin
         end
 end
 
-always @(posedge clk) begin
-        if (rst) begin
-                EX_to_MEM_reg <= 145'b0;
-        end
-        else if (readygo & MEM_allowin) begin
-                EX_to_MEM_reg <= {valid & ~rst, pc, IR, EX_to_MEM_zip, compute_result};
-        end
-        else if (~readygo & MEM_allowin) begin
-                EX_to_MEM_reg <= 145'b0;
-        end
-        else begin
-                EX_to_MEM_reg <= EX_to_MEM_reg;
-        end
-end
+assign EX_to_MEM_zip = {
+        valid & ~rst, pc, IR, 
+        inst_ld_b, inst_ld_bu, inst_ld_h, inst_ld_hu, inst_ld_w, 
+        inst_st_b, inst_st_h, inst_st_w,
+        mem_we, res_from_mem, gr_we, rkd_value, rf_waddr,
+        compute_result, is_csr
+};
 
-always @(posedge clk) begin
-        if (rst) begin
-                EX_except_reg <= 87'b0;
-        end
-        else if (readygo & MEM_allowin) begin
-                EX_except_reg <= {ID_except_reg, except_ale};
-        end
-        else if (~readygo & MEM_allowin) begin
-                EX_except_reg <= 87'b0;
-        end
-        else begin
-                EX_except_reg <= EX_except_reg;
-        end
-end
+assign EX_except_zip = {ID_except_reg, except_ale};
 
 endmodule
