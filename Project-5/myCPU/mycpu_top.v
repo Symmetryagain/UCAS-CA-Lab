@@ -1,27 +1,72 @@
 module mycpu_top(
-    input  wire        clk,
-    input  wire        resetn,
+    input  wire        aclk,
+    input  wire        aresetn,
 
-    output wire        inst_sram_req    ,
-    output wire        inst_sram_wr     ,
-    output wire [ 1:0] inst_sram_size   ,
-    output wire [ 3:0] inst_sram_wstrb  ,
-    output wire [31:0] inst_sram_addr   ,
-    output wire [31:0] inst_sram_wdata  ,
-    input  wire        inst_sram_addr_ok,
-    input  wire        inst_sram_data_ok,
-    input  wire [31:0] inst_sram_rdata  ,
+    // output wire        inst_sram_req    ,
+    // output wire        inst_sram_wr     ,
+    // output wire [ 1:0] inst_sram_size   ,
+    // output wire [ 3:0] inst_sram_wstrb  ,
+    // output wire [31:0] inst_sram_addr   ,
+    // output wire [31:0] inst_sram_wdata  ,
+    // input  wire        inst_sram_addr_ok,
+    // input  wire        inst_sram_data_ok,
+    // input  wire [31:0] inst_sram_rdata  ,
     
-    output wire        data_sram_req    ,
-    output wire        data_sram_wr     ,
-    output wire [ 1:0] data_sram_size   ,
-    output wire [ 3:0] data_sram_wstrb  ,
-    output wire [31:0] data_sram_addr   ,
-    output wire [31:0] data_sram_wdata  ,
-    input  wire        data_sram_addr_ok,
-    input  wire        data_sram_data_ok,
-    input  wire [31:0] data_sram_rdata  ,
-    
+    // output wire        data_sram_req    ,
+    // output wire        data_sram_wr     ,
+    // output wire [ 1:0] data_sram_size   ,
+    // output wire [ 3:0] data_sram_wstrb  ,
+    // output wire [31:0] data_sram_addr   ,
+    // output wire [31:0] data_sram_wdata  ,
+    // input  wire        data_sram_addr_ok,
+    // input  wire        data_sram_data_ok,
+    // input  wire [31:0] data_sram_rdata  ,
+
+     // ar    读请求通道
+    output reg[3:0]    arid,
+    output reg[31:0]   araddr,
+    output    [7:0]    arlen,
+    output reg[2:0]    arsize,    
+    output    [1:0]    arburst,
+    output    [1:0]    arlock,
+    output    [3:0]    arcache,
+    output    [2:0]    arprot,
+    output             arvalid, 
+    input              arready,
+    // r  读响应通道
+    input  [3:0]       rid,
+    input  [31:0]      rdata,
+    input  [1:0]       rresp,
+    input              rlast,
+    input              rvalid,
+    output             rready,
+
+    // aw  写请求通道
+    output    [3:0]    awid,
+    output reg[31:0]   awaddr,
+    output    [7:0]    awlen,
+    output reg[2:0]    awsize,
+    output    [1:0]    awburst,
+    output    [1:0]    awlock,
+    output    [1:0]    awcache,
+    output    [2:0]    awprot,
+    output             awvalid,
+    input              awready,
+
+    // w  写数据通道
+    output    [3:0]    wid,
+    output reg[31:0]   wdata,
+    output reg[3:0]    wstrb,
+    output             wlast,
+    output             wvalid,
+    input              wready,
+
+    // b  写响应通道
+    input  [3:0]       bid,
+    input  [1:0]       bresp,
+    input              bvalid,
+    output             bready,
+
     // trace debug interface
     output wire [31:0] debug_wb_pc,
     output wire [ 3:0] debug_wb_rf_we,
@@ -29,8 +74,12 @@ module mycpu_top(
     output wire [31:0] debug_wb_rf_wdata
 );
 
+wire            clk;
 reg             reset;
-always @(posedge clk) reset <= ~resetn;
+
+assign clk = aclk;
+always @(posedge clk) 
+    reset <= ~aresetn;
 
 // counter 
 reg  [63:0]     counter;
@@ -42,6 +91,27 @@ always @(posedge clk) begin
         counter <= counter + 64'b1;
     end
 end
+
+// SRAM
+wire            inst_sram_req;
+wire            inst_sram_wr;
+wire [ 1:0]     inst_sram_size;
+wire [31:0]     inst_sram_addr;
+wire [ 3:0]     inst_sram_wstrb;
+wire [31:0]     inst_sram_wdata;
+wire [31:0]     inst_sram_rdata;
+wire            inst_sram_addr_ok;
+wire            inst_sram_data_ok;
+
+wire            data_sram_req;
+wire            data_sram_wr;
+wire [ 1:0]     data_sram_size;
+wire [31:0]     data_sram_addr;
+wire [ 3:0]     data_sram_wstrb;
+wire [31:0]     data_sram_wdata;
+wire [31:0]     data_sram_rdata;
+wire            data_sram_addr_ok;
+wire            data_sram_data_ok;
 
 // allowin
 wire            ID_allowin;
@@ -112,6 +182,73 @@ wire            EX_is_csr;
 wire            EX_is_load;
 wire            MEM_is_csr;
 wire            MEM_is_load;
+
+// AXI bridge instance
+bridge u_bridge (
+    .aclk(aclk),
+    .aresetn(aresetn),
+
+    .inst_sram_req(inst_sram_req),
+    .inst_sram_wr(inst_sram_wr),
+    .inst_sram_size(inst_sram_size),
+    .inst_sram_addr(inst_sram_addr),
+    .inst_sram_wstrb(inst_sram_wstrb),
+    .inst_sram_wdata(inst_sram_wdata),
+    .inst_sram_rdata(inst_sram_rdata),
+    .inst_sram_addr_ok(inst_sram_addr_ok),
+    .inst_sram_data_ok(inst_sram_data_ok),
+
+    .data_sram_req(data_sram_req),
+    .data_sram_wr(data_sram_wr),
+    .data_sram_size(data_sram_size),
+    .data_sram_addr(data_sram_addr),
+    .data_sram_wstrb(data_sram_wstrb),
+    .data_sram_wdata(data_sram_wdata),
+    .data_sram_addr_ok(data_sram_addr_ok),
+    .data_sram_rdata(data_sram_rdata),
+    .data_sram_data_ok(data_sram_data_ok),
+
+    .arid(arid),
+    .araddr(araddr),
+    .arlen(arlen),
+    .arsize(arsize),
+    .arburst(arburst),
+    .arlock(arlock),
+    .arcache(arcache),
+    .arprot(arprot),
+    .arvalid(arvalid),
+    .arready(arready),
+
+    .rid(rid),
+    .rdata(rdata),
+    .rresp(rresp),
+    .rlast(rlast),
+    .rvalid(rvalid),
+    .rready(rready),
+
+    .awid(awid),
+    .awaddr(awaddr),
+    .awlen(awlen),
+    .awsize(awsize),
+    .awburst(awburst),
+    .awlock(awlock),
+    .awcache(awcache),
+    .awprot(awprot),
+    .awvalid(awvalid),
+    .awready(awready),
+
+    .wid(wid),
+    .wdata(wdata),
+    .wstrb(wstrb),
+    .wlast(wlast),
+    .wvalid(wvalid),
+    .wready(wready),
+
+    .bid(bid),
+    .bresp(bresp),
+    .bvalid(bvalid),
+    .bready(bready)
+);
 
 // IF instance
 IF u_IF (
@@ -254,7 +391,7 @@ regfile u_regfile (
 // csr instance
 csr u_csr(
     .clk       (clk),
-    .reset     (~resetn),
+    .reset     (~aresetn),
 
     .csr_re    (csr_re),
     .csr_num   (csr_num),
