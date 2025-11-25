@@ -23,10 +23,10 @@ module mycpu_top(
     // input  wire [31:0] data_sram_rdata  ,
 
      // ar    读请求通道
-    output reg[3:0]    arid,
-    output reg[31:0]   araddr,
+    output    [3:0]    arid,
+    output    [31:0]   araddr,
     output    [7:0]    arlen,
-    output reg[2:0]    arsize,    
+    output    [2:0]    arsize,    
     output    [1:0]    arburst,
     output    [1:0]    arlock,
     output    [3:0]    arcache,
@@ -43,9 +43,9 @@ module mycpu_top(
 
     // aw  写请求通道
     output    [3:0]    awid,
-    output reg[31:0]   awaddr,
+    output    [31:0]   awaddr,
     output    [7:0]    awlen,
-    output reg[2:0]    awsize,
+    output    [2:0]    awsize,
     output    [1:0]    awburst,
     output    [1:0]    awlock,
     output    [1:0]    awcache,
@@ -55,8 +55,8 @@ module mycpu_top(
 
     // w  写数据通道
     output    [3:0]    wid,
-    output reg[31:0]   wdata,
-    output reg[3:0]    wstrb,
+    output    [31:0]   wdata,
+    output    [3:0]    wstrb,
     output             wlast,
     output             wvalid,
     input              wready,

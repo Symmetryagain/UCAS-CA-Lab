@@ -113,11 +113,40 @@ reg [4:0] w_next_state;
 reg [1:0] b_cur_state;
 reg [1:0] b_next_state;
 
+reg [1:0]  r_cnt;
+reg [3:0]  rid_reg;
+reg [31:0] inst_rdata_reg;
+reg [31:0] data_rdata_reg;
+reg [31:0] rdata_buffer [1:0];
+// reg [3:0]  rid_buffer   [3:0];
+
 wire reset;
 assign reset = ~aresetn;
 
 wire need_wait;  
 assign need_wait = (araddr == awaddr) & (|w_cur_state[4:1]);
+
+// read_buffer
+always @(posedge aclk)begin
+    if(reset)begin
+        rdata_buffer[0] <= 32'b0;
+        rdata_buffer[1] <= 32'b0;
+    end
+    else if(rready & rvalid)begin
+        rdata_buffer[rid[0]] <= rdata;
+    end
+end
+
+ always @(posedge aclk) begin
+        if(reset)
+            r_cnt <= 2'b0;
+        else if(arvalid & arready & rvalid & rready)
+            r_cnt <= r_cnt;
+        else if(arvalid & arready)
+            r_cnt <= r_cnt + 2'b1;
+        else if(rvalid & rready)
+            r_cnt <= r_cnt - 2'b1;
+    end
 
 // 读请求状态机
 always @(posedge aclk)begin
@@ -138,7 +167,7 @@ always @(*) begin
                 ar_next_state = ar_wait;
         end
         ar_req: begin
-            if(arvalid && arready)
+            if(arvalid & arready)
                 ar_next_state = ar_wait;
             else
                 ar_next_state = ar_req;
@@ -159,7 +188,7 @@ end
 always @(*) begin
     case(r_cur_state)
         r_wait: begin
-            if(arvalid & arready)
+            if(arvalid & arready | (|r_cnt))
                 r_next_state = r_read;
             else
                 r_next_state = r_wait;
@@ -204,13 +233,13 @@ always @(*) begin
                     w_next_state = w_wait_aw_w;
         end
         w_wait_aw: begin
-            if(wvalid & wready) 
+            if(awvalid & awready) 
                     w_next_state = w_done;
             else 
                     w_next_state = w_wait_aw;
         end
         w_wait_w: begin
-            if(awvalid & awready)
+            if(wvalid & wready)
                     w_next_state = w_done;
             else
                     w_next_state = w_wait_w;
@@ -338,29 +367,33 @@ assign awprot   = 3'b0;
 assign wid      = 4'b0001;
 assign wlast    = 1'b1;
 
-reg [31:0] inst_rdata_reg;
-reg [31:0] data_rdata_reg;
+// always @(posedge aclk) begin
+//         if(reset)
+//             inst_rdata_reg <= 32'b0;
+//         else if(r_cur_state[1] & rvalid & rready & ~rid[0])
+//             inst_rdata_reg <= rdata;
+// end
+
+// always @(posedge aclk) begin
+//         if(reset)
+//             data_rdata_reg <= 32'b0;
+//         else if(r_cur_state[1] & rvalid & rready & rid[0])
+//             data_rdata_reg <= rdata;
+// end
 
 always @(posedge aclk) begin
         if(reset)
-            inst_rdata_reg <= 32'b0;
-        else if(r_cur_state[1] & rvalid & rready & ~rid[0])
-            inst_rdata_reg <= rdata;
+            rid_reg <= 4'b0;
+        else if(rvalid & rready)
+            rid_reg <= rid;
 end
 
-always @(posedge aclk) begin
-        if(reset)
-            data_rdata_reg <= 32'b0;
-        else if(r_cur_state[1] & rvalid & rready & rid[0])
-            data_rdata_reg <= rdata;
-end
-
-assign inst_sram_rdata = inst_rdata_reg;
-assign data_sram_rdata = data_rdata_reg;
+assign inst_sram_rdata = rdata_buffer[0];
+assign data_sram_rdata = rdata_buffer[1];
 
 assign inst_sram_addr_ok = ~arid[0] & arvalid & arready | ~awid[0] & awvalid & awready;
 assign data_sram_addr_ok =  arid[0] & arvalid & arready |  awid[0] & awvalid & awready; 
 
-assign inst_sram_data_ok = ~rid[0] & r_cur_state[2] | bvalid & bready;
-assign data_sram_data_ok =  rid[0] & r_cur_state[2] | bvalid & bready;
+assign inst_sram_data_ok = (~rid_reg[0] & r_cur_state[2]);
+assign data_sram_data_ok =  (rid_reg[0] & r_cur_state[2]) | (bvalid & bready);
 endmodule
