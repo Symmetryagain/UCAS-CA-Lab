@@ -1,0 +1,60 @@
+\documentclass{article}
+
+\usepackage[a4paper]{geometry}
+\geometry{left=2.5cm,right=2.5cm,top=3cm,bottom=3cm}
+\usepackage[UTF8,space,hyperref]{ctex}
+\usepackage{amsmath, amsthm, amssymb, bm, color, framed, graphicx, hyperref, mathrsfs, physics}
+\hypersetup{hidelinks,colorlinks=true,allcolors=black,pdfstartview=Fit,breaklinks=true}
+
+\title{Project 5 实验报告}
+\author{钱翰林 周远扬 石曜铭}
+\date{12/11/2025}
+
+\begin{document}
+\maketitle
+
+\section{小组分工情况说明}
+\begin{itemize}
+        \item 周远扬: 设计类SRAM-AXI转接桥
+        \item 石曜铭: 设计类SRAM交互状态机，优化流水线时序，调试
+        \item 钱翰林: 调试，报告撰写
+\end{itemize}
+
+\section{处理器结构设计图}
+\begin{figure}[htbp]
+        \centering
+        \includegraphics[width=16cm]{pics/graph.png}
+\end{figure}
+
+
+\section{主要设计点}
+
+\subsection{类SRAM总线时序设计}
+在exp14中，我们对原先的流水级时序进行了较大的修改。首先，流水级间信号的传递改成了用wire传向下一级，接收时用reg打一拍；其次，读寄存器时的load-block条件从暴力记录上一条指令以及pc，改为添加从EX和MEM模块到ID模块的wire，传递当前EX和MEM中是否是load，以及写的寄存器编号，这样只需在ID判断是否有冲突即可；类似的，csr指令的数据相关问题只需要分别从EX和MEM向ID输出当前指令是否为csr，以及影响的寄存器编号。这样逻辑变得清晰，时序更加规整。
+
+在此基础上，我们按照两次握手初步完成IF级和MEM级的设计。接下来的问题是处理flush，其中MEM相对简单，因为WB流水级发出flush信号时，下一条指令必然刚进入MEM级，因此强制回到初始状态init即可废止当前指令。对于IF级，需要额外添加lock\_addr和lock\_data两个状态，分别对应于等待addr和data时收到flush信号，在这里处理被flush掉的取指请求。
+
+\subsection{类SRAM-AXI转接桥设计}
+
+在bridge.v中实现。主要部分是维护读请求、读响应、写请求、写响应四个状态机，并根据状态机的状态设置相应的AXI握手信号（arvalid、rready、awvalid、wvalid、bready），最后将得到的数据保存在rdata\_buffer返回，并设置addr\_ok和data\_ok信号。
+
+\section{调试}
+
+\subsection{类SRAM随机访问延迟验证出错}
+
+ID、EX、MEM的状态机没有在flush时返回init，修改后可以通过各种随机访问延迟验证。
+
+\subsection{AXI同时收到两个读请求时读响应状态机出错}
+一开始设计的读响应状态机只在读请求握手成功（arvalid \& arready）时才会拉高rready。但同时处理两个读请求时，可能出现前一个读响应握手尚未完成，后一个读请求握手就已完成的情况。这样会导致第一次读响应握手完成后，状态机不会进行第二次读响应握手。  
+
+解决方案：添加r\_cnt寄存器，用于记录完成读请求握手且未完成读响应握手的请求个数。当r\_cnt非零时，读响应状态机也会切换状态拉高rready。
+
+
+\subsection{inst\_sram\_data\_ok 时序不当，导致取指错误}
+inst\_sram\_data\_ok信号拉高时需要同时满足rid为0且读响应握手完成，但是rid只在rvalid拉高时才为有效值，所以直接使用rid信号会导致时序错误。
+
+解决方案：添加rid\_reg寄存器，用于记录完成读响应握手时的rid，替换原来data\_ok里的rid。
+
+
+
+\end{document}
