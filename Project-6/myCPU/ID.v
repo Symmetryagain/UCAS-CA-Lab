@@ -193,6 +193,12 @@ wire            inst_rdcntid;
 wire            inst_rdcntvl;
 wire            inst_rdcntvh;
 
+wire            inst_tlbsrch;
+wire            inst_tlbrd;
+wire            inst_tlbwr;
+wire            inst_tlbfill;
+wire            inst_invtlb;
+
 wire            need_ui5;
 wire            need_ui12;
 wire            need_si12;
@@ -281,9 +287,14 @@ assign  inst_break      = op_31_26_d[6'h00] & op_25_22_d[4'h0] & op_21_20_d[2'h2
 assign  inst_rdcntid    = op_31_26_d[6'h00] & op_25_22_d[4'h0] & op_21_20_d[2'h0] & op_19_15_d[5'h00] & (rk == 5'h18) & (rd == 5'h00);
 assign  inst_rdcntvl    = op_31_26_d[6'h00] & op_25_22_d[4'h0] & op_21_20_d[2'h0] & op_19_15_d[5'h00] & (rk == 5'h18) & (rj == 5'h00);
 assign  inst_rdcntvh    = op_31_26_d[6'h00] & op_25_22_d[4'h0] & op_21_20_d[2'h0] & op_19_15_d[5'h00] & (rk == 5'h19) & (rj == 5'h00);
+assign  inst_tlbsrch    = op_31_26_d[6'h01] & op_25_22_d[4'h9] & op_21_20_d[2'h0] & op_19_15_d[5'h10] & (rk == 5'h0a) & (rj == 5'h00) & (rd == 5'h00);
+assign  inst_tlbrd      = op_31_26_d[6'h01] & op_25_22_d[4'h9] & op_21_20_d[2'h0] & op_19_15_d[5'h10] & (rk == 5'h0b) & (rj == 5'h00) & (rd == 5'h00);
+assign  inst_tlbwr      = op_31_26_d[6'h01] & op_25_22_d[4'h9] & op_21_20_d[2'h0] & op_19_15_d[5'h10] & (rk == 5'h0c) & (rj == 5'h00) & (rd == 5'h00);
+assign  inst_tlbfill    = op_31_26_d[6'h01] & op_25_22_d[4'h9] & op_21_20_d[2'h0] & op_19_15_d[5'h10] & (rk == 5'h0d) & (rj == 5'h00) & (rd == 5'h00);
+assign  inst_invtlb     = op_31_26_d[6'h01] & op_25_22_d[4'h9] & op_21_20_d[2'h0] & op_19_15_d[5'h13];
 
 assign  alu_op[ 0]      = inst_add_w | inst_addi_w | inst_ld_w | inst_st_w
-                        | inst_ld_b | inst_ld_bu |inst_ld_h | inst_ld_hu | inst_st_b | inst_st_h
+                        | inst_ld_b | inst_ld_bu | inst_ld_h | inst_ld_hu | inst_st_b | inst_st_h
                         | inst_jirl | inst_bl | inst_pcaddu12i;
 assign  alu_op[ 1]      = inst_sub_w;
 assign  alu_op[ 2]      = inst_slt | inst_slti;
@@ -307,14 +318,14 @@ assign  need_si20       =  inst_lu12i_w | inst_pcaddu12i;
 assign  need_si26       =  inst_b | inst_bl;
 assign  src2_is_4       =  inst_jirl | inst_bl;
 
-assign imm = src2_is_4 ? 32'h4 :
-             need_si20 ? {i20[19:0], 12'b0} :
-             need_ui12 ? {{20'b0}, i12} :
-             /*need_ui5 || need_si12*/{{20{i12[11]}}, i12[11:0]} ;
+assign  imm             =  src2_is_4 ? 32'h4 :
+                                need_si20 ? {i20[19:0], 12'b0} :
+                                need_ui12 ? {{20'b0}, i12} :
+       /*need_ui5 || need_si12*/{{20{i12[11]}}, i12[11:0]} ;
 
 
 assign  br_offs         = need_si26 ? {{ 4{i26[25]}}, i26[25:0], 2'b0} :
-                             {{14{i16[15]}}, i16[15:0], 2'b0} ;
+                                {{14{i16[15]}}, i16[15:0], 2'b0} ;
 
 assign  jirl_offs       = {{14{i16[15]}}, i16[15:0], 2'b0};
 
@@ -394,7 +405,8 @@ assign except_ine  = ~(inst_add_w | inst_sub_w | inst_slt | inst_sltu | inst_nor
                 inst_ori | inst_xori | inst_sll | inst_srl | inst_sra | inst_pcaddu12i | inst_mul | inst_mulh |
                 inst_mulhu | inst_div | inst_mod | inst_divu | inst_modu | inst_blt | inst_bge | inst_bltu |
                 inst_bgeu | inst_ld_b | inst_ld_h | inst_ld_bu | inst_ld_hu | inst_st_b | inst_st_h |
-                inst_csrrd | inst_csrwr | inst_csrxchg | inst_ertn | inst_syscall | inst_break | inst_rdcntid | inst_rdcntvl | inst_rdcntvh) & valid;
+                inst_csrrd | inst_csrwr | inst_csrxchg | inst_ertn | inst_syscall | inst_break | inst_rdcntid | inst_rdcntvl | inst_rdcntvh |
+                inst_tlbsrch | inst_tlbrd | inst_tlbwr | inst_tlbfill | inst_invtlb) & valid;
 assign except_int  = has_int;
 
 assign ID_to_EX_zip = {
