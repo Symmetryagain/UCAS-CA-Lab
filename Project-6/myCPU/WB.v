@@ -26,7 +26,13 @@ module WB(
         output  wire [ 8:0]     wb_esubcode,
         output  wire [31:0]     wb_vaddr,
         // top -> WB
-        input   wire [31:0]     csr_rvalue
+        input   wire [31:0]     csr_rvalue,
+
+        output                  inst_tlbrd,
+        output       [31:0]     tlbehi_wdata,
+        output       [31:0]     tlbelo0_wdata,
+        output       [31:0]     tlbelo1_wdata,
+        output       [31:0]     tlbidx_wdata
 );
 
 wire            valid;
@@ -113,4 +119,5 @@ assign wb_ecode    =    except_sys?  `ECODE_SYS:
 assign wb_esubcode = //inst_syscall ? `ESUBCODE_NONE : 
                         9'd0;
 
+assign tlbehi_wdata = {};
 endmodule

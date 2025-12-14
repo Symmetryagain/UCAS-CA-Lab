@@ -41,7 +41,7 @@ module ID(
 assign ID_to_EX = readygo & EX_allowin;
 
 wire      is_csr;
-assign is_csr = inst_csrrd | inst_csrwr | inst_csrxchg | inst_rdcntid;
+assign is_csr = inst_csrrd | inst_csrwr | inst_csrxchg | inst_rdcntid | inst_tlbrd;
 
 reg             at_state;
 always @(posedge clk) begin
@@ -392,10 +392,13 @@ assign  br_target       = (inst_beq | inst_bne | inst_bl | inst_b | inst_blt | i
 assign  ID_flush        = ((br_taken ^ predict) | inst_jirl) & ~rst & valid;
 
 assign csr_re       = inst_csrrd | inst_csrwr | inst_csrxchg | inst_rdcntid;
-assign csr_we       = inst_csrwr | inst_csrxchg;
-assign csr_wmask    = {32{inst_csrxchg}} & rj_value | {32{inst_csrwr}};
+assign csr_we       = inst_csrwr | inst_csrxchg | inst_tlbsrch | inst_tlbrd;
+assign csr_wmask    = {32{inst_csrxchg}} & rj_value | {32{inst_csrwr}} | {32{inst_tlbsrch}} | {32{inst_tlbrd}};
 assign csr_wvalue   = rkd_value;
-assign csr_num      = inst_rdcntid ? `CSR_TID : inst[23:10];
+assign csr_num      = inst_rdcntid ? `CSR_TID :
+                      inst_tlbsrch ? `CSR_TLBIDX:
+                      
+                      inst[23:10];
 
 assign except_sys  = inst_syscall;
 assign except_brk  = inst_break;

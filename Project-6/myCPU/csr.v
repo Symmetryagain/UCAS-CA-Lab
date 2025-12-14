@@ -18,7 +18,13 @@ module csr(
         input  wire  [ 5:0]     wb_ecode,  
         input  wire  [ 8:0]     wb_esubcode,
         output wire  [31:0]     csr_eentry_data,
-        output reg   [31:0]     csr_era_pc
+        output reg   [31:0]     csr_era_pc,
+
+        input                   inst_tlbrd,
+        input        [31:0]     tlbehi_wdata,
+        input        [31:0]     tlbelo0_wdata,
+        input        [31:0]     tlbelo1_wdata,
+        input        [31:0]     tlbidx_wdata
 );
 
 wire [31: 0] csr_crmd_data;
@@ -84,6 +90,11 @@ always @(posedge clk) begin
         csr_tlbidx_ps    <= csr_wmask[`CSR_TLBIDX_PS]&csr_wvalue[`CSR_TLBIDX_PS]
                          | ~csr_wmask[`CSR_TLBIDX_PS]&csr_tlbidx_ps;
     end
+    else if (inst_tlbrd) begin
+        csr_tlbidx_index <= csr_tlbidx_index;
+        csr_tlbidx_ne    <= tlbidx_wdata[`CSR_TLBIDX_NE];
+        csr_tlbidx_ps    <= tlbidx_wdata[`CSR_TLBIDX_PS];
+    end
  end
 assign csr_tlbidx_data = {csr_tlbidx_ne, 1'b0, csr_tlbidx_ps, 8'b0, csr_tlbidx_index};
 
@@ -99,6 +110,9 @@ always @(posedge clk) begin
     else if (csr_we && csr_num==`CSR_TLBEHI) begin
         csr_tlbehi_vppn <= csr_wmask[`CSR_TLBEHI_VPPN]&csr_wvalue[`CSR_TLBEHI_VPPN]
                         | ~csr_wmask[`CSR_TLBEHI_VPPN]&csr_tlbehi_vppn;
+    end
+    else if (inst_tlbrd) begin
+        csr_tlbehi_vppn <= tlbehi_wdata[`CSR_TLBEHI_VPPN];
     end
  end
 
@@ -135,6 +149,14 @@ always @(posedge clk) begin
         csr_tlbelo0_v   <= csr_wmask[`CSR_TLBELO_V]  &csr_wvalue[`CSR_TLBELO_V]
                         | ~csr_wmask[`CSR_TLBELO_V]  &csr_tlbelo0_v; 
     end
+    else if (inst_tlbrd) begin
+        csr_tlbelo0_ppn <= tlbelo0_wdata[`CSR_TLBELO_PPN];
+        csr_tlbelo0_plv <= tlbelo0_wdata[`CSR_TLBELO_PLV];
+        csr_tlbelo0_mat <= tlbelo0_wdata[`CSR_TLBELO_MAT];
+        csr_tlbelo0_g   <= tlbelo0_wdata[`CSR_TLBELO_G];
+        csr_tlbelo0_d   <= tlbelo0_wdata[`CSR_TLBELO_D];
+        csr_tlbelo0_v   <= tlbelo0_wdata[`CSR_TLBELO_V];
+    end
  end 
 
 // TLBELO1
@@ -169,6 +191,14 @@ always @(posedge clk) begin
                         | ~csr_wmask[`CSR_TLBELO_D]  &csr_tlbelo1_d;
         csr_tlbelo1_v   <= csr_wmask[`CSR_TLBELO_V]  &csr_wvalue[`CSR_TLBELO_V]
                         | ~csr_wmask[`CSR_TLBELO_V]  &csr_tlbelo1_v;
+    end
+    else if (inst_tlbrd) begin
+        csr_tlbelo1_ppn <= tlbelo1_wdata[`CSR_TLBELO_PPN];
+        csr_tlbelo1_plv <= tlbelo1_wdata[`CSR_TLBELO_PLV];
+        csr_tlbelo1_mat <= tlbelo1_wdata[`CSR_TLBELO_MAT];
+        csr_tlbelo1_g   <= tlbelo1_wdata[`CSR_TLBELO_G];
+        csr_tlbelo1_d   <= tlbelo1_wdata[`CSR_TLBELO_D];
+        csr_tlbelo1_v   <= tlbelo1_wdata[`CSR_TLBELO_V];
     end
  end
 
