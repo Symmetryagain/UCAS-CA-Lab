@@ -64,6 +64,211 @@ wire [31:0]  csr_tcfg_data;
 wire         csr_ticlr_clr;
 wire [31:0]  csr_ticlr_data;
 
+// TLBIDX
+reg  [15:0]  csr_tlbidx_index;
+reg          csr_tlbidx_ne;
+reg  [5:0]   csr_tlbidx_ps;
+wire [31:0]  csr_tlbidx_data;
+
+always @(posedge clk) begin
+    if (reset) begin
+        csr_tlbidx_ne <= 1'b0;
+        csr_tlbidx_index <= 16'b0;
+        csr_tlbidx_ps <= 6'b0;
+    end
+    else if (csr_we && csr_num==`CSR_TLBIDX) begin
+        csr_tlbidx_index <= csr_wmask[`CSR_TLBIDX_INDEX]&csr_wvalue[`CSR_TLBIDX_INDEX]
+                         | ~csr_wmask[`CSR_TLBIDX_INDEX]&csr_tlbidx_index;
+        csr_tlbidx_ne    <= csr_wmask[`CSR_TLBIDX_NE]&csr_wvalue[`CSR_TLBIDX_NE]
+                         | ~csr_wmask[`CSR_TLBIDX_NE]&csr_tlbidx_ne;
+        csr_tlbidx_ps    <= csr_wmask[`CSR_TLBIDX_PS]&csr_wvalue[`CSR_TLBIDX_PS]
+                         | ~csr_wmask[`CSR_TLBIDX_PS]&csr_tlbidx_ps;
+    end
+ end
+assign csr_tlbidx_data = {csr_tlbidx_ne, 1'b0, csr_tlbidx_ps, 8'b0, csr_tlbidx_index};
+
+ // TLBEHI
+reg  [18:0]  csr_tlbehi_vppn;
+wire [31:0]  csr_tlbehi_data;
+assign csr_tlbehi_data = {csr_tlbehi_vppn, 13'b0};
+
+always @(posedge clk) begin
+    if (reset) begin
+        csr_tlbehi_vppn <= 19'b0;
+    end
+    else if (csr_we && csr_num==`CSR_TLBEHI) begin
+        csr_tlbehi_vppn <= csr_wmask[`CSR_TLBEHI_VPPN]&csr_wvalue[`CSR_TLBEHI_VPPN]
+                        | ~csr_wmask[`CSR_TLBEHI_VPPN]&csr_tlbehi_vppn;
+    end
+ end
+
+// TLBELO0
+reg  [23:0]  csr_tlbelo0_ppn;
+reg  [ 1:0]  csr_tlbelo0_plv;
+reg  [ 1:0]  csr_tlbelo0_mat;
+reg          csr_tlbelo0_g;
+reg          csr_tlbelo0_d;
+reg          csr_tlbelo0_v;
+wire [31:0]  csr_tlbelo0_data;
+assign csr_tlbelo0_data = {csr_tlbelo0_ppn, 1'b0, csr_tlbelo0_g, csr_tlbelo0_mat, csr_tlbelo0_plv, csr_tlbelo0_d, csr_tlbelo0_v};
+
+always @(posedge clk) begin
+    if(reset) begin
+        csr_tlbelo0_ppn <= 24'b0;
+        csr_tlbelo0_plv <= 2'b0;
+        csr_tlbelo0_mat <= 2'b0;
+        csr_tlbelo0_g   <= 1'b0;
+        csr_tlbelo0_d   <= 1'b0;
+        csr_tlbelo0_v   <= 1'b0;
+    end
+    else if (csr_we && csr_num==`CSR_TLBELO0) begin
+        csr_tlbelo0_ppn <= csr_wmask[`CSR_TLBELO_PPN]&csr_wvalue[`CSR_TLBELO_PPN]
+                        | ~csr_wmask[`CSR_TLBELO_PPN]&csr_tlbelo0_ppn;
+        csr_tlbelo0_plv <= csr_wmask[`CSR_TLBELO_PLV]&csr_wvalue[`CSR_TLBELO_PLV]
+                        | ~csr_wmask[`CSR_TLBELO_PLV]&csr_tlbelo0_plv;
+        csr_tlbelo0_mat <= csr_wmask[`CSR_TLBELO_MAT]&csr_wvalue[`CSR_TLBELO_MAT]
+                        | ~csr_wmask[`CSR_TLBELO_MAT]&csr_tlbelo0_mat;
+        csr_tlbelo0_g   <= csr_wmask[`CSR_TLBELO_G]  &csr_wvalue[`CSR_TLBELO_G]
+                        | ~csr_wmask[`CSR_TLBELO_G]  &csr_tlbelo0_g;
+        csr_tlbelo0_d   <= csr_wmask[`CSR_TLBELO_D]  &csr_wvalue[`CSR_TLBELO_D]
+                        | ~csr_wmask[`CSR_TLBELO_D]  &csr_tlbelo0_d;
+        csr_tlbelo0_v   <= csr_wmask[`CSR_TLBELO_V]  &csr_wvalue[`CSR_TLBELO_V]
+                        | ~csr_wmask[`CSR_TLBELO_V]  &csr_tlbelo0_v; 
+    end
+ end 
+
+// TLBELO1
+reg  [23:0]  csr_tlbelo1_ppn;
+reg  [ 1:0]  csr_tlbelo1_plv;   
+reg  [ 1:0]  csr_tlbelo1_mat;
+reg          csr_tlbelo1_g;
+reg          csr_tlbelo1_d;
+reg          csr_tlbelo1_v;
+wire [31:0]  csr_tlbelo1_data;
+assign csr_tlbelo1_data = {csr_tlbelo1_ppn, 1'b0, csr_tlbelo1_g, csr_tlbelo1_mat, csr_tlbelo1_plv, csr_tlbelo1_d, csr_tlbelo1_v};
+
+always @(posedge clk) begin
+    if(reset) begin
+        csr_tlbelo1_ppn <= 24'b0;
+        csr_tlbelo1_plv <= 2'b0;
+        csr_tlbelo1_mat <= 2'b0;
+        csr_tlbelo1_g   <= 1'b0;
+        csr_tlbelo1_d   <= 1'b0;
+        csr_tlbelo1_v   <= 1'b0;
+    end
+    else if (csr_we && csr_num==`CSR_TLBELO1) begin
+        csr_tlbelo1_ppn <= csr_wmask[`CSR_TLBELO_PPN]&csr_wvalue[`CSR_TLBELO_PPN]
+                        | ~csr_wmask[`CSR_TLBELO_PPN]&csr_tlbelo1_ppn;
+        csr_tlbelo1_plv <= csr_wmask[`CSR_TLBELO_PLV]&csr_wvalue[`CSR_TLBELO_PLV]
+                        | ~csr_wmask[`CSR_TLBELO_PLV]&csr_tlbelo1_plv;
+        csr_tlbelo1_mat <= csr_wmask[`CSR_TLBELO_MAT]&csr_wvalue[`CSR_TLBELO_MAT]
+                        | ~csr_wmask[`CSR_TLBELO_MAT]&csr_tlbelo1_mat;
+        csr_tlbelo1_g   <= csr_wmask[`CSR_TLBELO_G]  &csr_wvalue[`CSR_TLBELO_G]
+                        | ~csr_wmask[`CSR_TLBELO_G]  &csr_tlbelo1_g;
+        csr_tlbelo1_d   <= csr_wmask[`CSR_TLBELO_D]  &csr_wvalue[`CSR_TLBELO_D]
+                        | ~csr_wmask[`CSR_TLBELO_D]  &csr_tlbelo1_d;
+        csr_tlbelo1_v   <= csr_wmask[`CSR_TLBELO_V]  &csr_wvalue[`CSR_TLBELO_V]
+                        | ~csr_wmask[`CSR_TLBELO_V]  &csr_tlbelo1_v;
+    end
+ end
+
+// ASID
+reg  [9:0]   csr_asid_asid;
+reg  [7:0]   csr_asid_asidbits;
+wire [31:0]  csr_asid_data;
+assign csr_asid_data = {8'b0, csr_asid_asidbits, 6'b0, csr_asid_asid};
+
+always @(posedge clk) begin
+    if (reset) begin
+        csr_asid_asid <= 10'b0;
+        csr_asid_asidbits <= 8'b0;
+    end
+    else if (csr_we && csr_num==`CSR_ASID) begin
+        csr_asid_asid <= csr_wmask[`CSR_ASID_ASID]&csr_wvalue[`CSR_ASID_ASID]
+                      | ~csr_wmask[`CSR_ASID_ASID]&csr_asid_asid;
+        csr_asid_asidbits <= csr_wmask[`CSR_ASID_ASIDBITS]&csr_wvalue[`CSR_ASID_ASIDBITS]
+                          | ~csr_wmask[`CSR_ASID_ASIDBITS]&csr_asid_asidbits;
+    end
+ end
+
+// TLBRENTRY
+reg  [25:0]  csr_tlbrentry_pa;
+wire [31:0]  csr_tlbrentry_data;
+assign csr_tlbrentry_data = {csr_tlbrentry_pa, 6'b0};
+
+always @(posedge clk) begin
+    if (reset) begin
+        csr_tlbrentry_pa <= 26'b0;
+    end
+    else if (csr_we && csr_num==`CSR_TLBRENTRY) begin
+        csr_tlbrentry_pa <= csr_wmask[`CSR_TLBRENTRY_PA]&csr_wvalue[`CSR_TLBRENTRY_PA]
+                         | ~csr_wmask[`CSR_TLBRENTRY_PA]&csr_tlbrentry_pa;
+    end
+ end
+
+// DMW0
+reg    csr_dmw0_plv0;
+reg    csr_dmw0_plv3;
+reg  [1:0] csr_dmw0_mat;
+reg  [2:0] csr_dmw0_pseg;
+reg  [2:0] csr_dmw0_vseg;
+wire [31:0] csr_dmw0_data;
+assign csr_dmw0_data = {csr_dmw0_vseg, 1'b0, csr_dmw0_pseg, 19'b0, csr_dmw0_mat, csr_dmw0_plv3, 2'b0, csr_dmw0_plv0};
+
+always @(posedge clk) begin
+    if (reset) begin
+        csr_dmw0_plv0 <= 1'b0;
+        csr_dmw0_plv3 <= 1'b0;
+        csr_dmw0_mat  <= 2'b0;
+        csr_dmw0_pseg <= 3'b0;
+        csr_dmw0_vseg <= 3'b0;
+    end
+    else if (csr_we && csr_num==`CSR_DMW0) begin
+        csr_dmw0_plv0 <= csr_wmask[`CSR_DMW_PLV0]&csr_wvalue[`CSR_DMW_PLV0]
+                      | ~csr_wmask[`CSR_DMW_PLV0]&csr_dmw0_plv0;
+        csr_dmw0_plv3 <= csr_wmask[`CSR_DMW_PLV3]&csr_wvalue[`CSR_DMW_PLV3]
+                      | ~csr_wmask[`CSR_DMW_PLV3]&csr_dmw0_plv3;
+        csr_dmw0_mat  <= csr_wmask[`CSR_DMW_MAT]&csr_wvalue[`CSR_DMW_MAT]
+                      | ~csr_wmask[`CSR_DMW_MAT]&csr_dmw0_mat;
+        csr_dmw0_pseg <= csr_wmask[`CSR_DMW_PSEG]&csr_wvalue[`CSR_DMW_PSEG]
+                      | ~csr_wmask[`CSR_DMW_PSEG]&csr_dmw0_pseg;
+        csr_dmw0_vseg <= csr_wmask[`CSR_DMW_VSEG]&csr_wvalue[`CSR_DMW_VSEG]
+                      | ~csr_wmask[`CSR_DMW_VSEG]&csr_dmw0_vseg;
+    end
+ end
+
+ // DMW1
+reg    csr_dmw1_plv0;
+reg    csr_dmw1_plv3;
+reg  [1:0] csr_dmw1_mat;
+reg  [2:0] csr_dmw1_pseg;
+reg  [2:0] csr_dmw1_vseg;
+wire [31:0] csr_dmw1_data;
+assign csr_dmw1_data = {csr_dmw1_vseg, 1'b0, csr_dmw1_pseg, 19'b0, csr_dmw1_mat, csr_dmw1_plv3, 2'b0, csr_dmw1_plv0};
+
+always @(posedge clk) begin
+    if (reset) begin
+        csr_dmw1_plv0 <= 1'b0;
+        csr_dmw1_plv3 <= 1'b0;
+        csr_dmw1_mat  <= 2'b0;
+        csr_dmw1_pseg <= 3'b0;
+        csr_dmw1_vseg <= 3'b0;
+    end
+    else if (csr_we && csr_num==`CSR_DMW1) begin
+        csr_dmw1_plv0 <= csr_wmask[`CSR_DMW_PLV0]&csr_wvalue[`CSR_DMW_PLV0]
+                      | ~csr_wmask[`CSR_DMW_PLV0]&csr_dmw1_plv0;
+        csr_dmw1_plv3 <= csr_wmask[`CSR_DMW_PLV3]&csr_wvalue[`CSR_DMW_PLV3]
+                      | ~csr_wmask[`CSR_DMW_PLV3]&csr_dmw1_plv3;
+        csr_dmw1_mat  <= csr_wmask[`CSR_DMW_MAT]&csr_wvalue[`CSR_DMW_MAT]
+                      | ~csr_wmask[`CSR_DMW_MAT]&csr_dmw1_mat;
+        csr_dmw1_pseg <= csr_wmask[`CSR_DMW_PSEG]&csr_wvalue[`CSR_DMW_PSEG]
+                      | ~csr_wmask[`CSR_DMW_PSEG]&csr_dmw1_pseg;
+        csr_dmw1_vseg <= csr_wmask[`CSR_DMW_VSEG]&csr_wvalue[`CSR_DMW_VSEG]
+                      | ~csr_wmask[`CSR_DMW_VSEG]&csr_dmw1_vseg;
+    end
+ end
+
+
 assign hw_int_in = 8'b0;
 assign ipi_int_in= 1'b0;
 
@@ -100,7 +305,7 @@ always @(posedge clk) begin
         csr_crmd_ie <= csr_prmd_pie;
     else if (csr_we && csr_num==`CSR_CRMD)
         csr_crmd_ie <= csr_wmask[`CSR_CRMD_PIE]&csr_wvalue[`CSR_CRMD_PIE]
-                    | ~csr_wmask[`CSR_CRMD_PIE]&csr_crmd_ie;
+                | ~csr_wmask[`CSR_CRMD_PIE]&csr_crmd_ie;
  end
 
 assign csr_crmd_da   = 1'b1; 
@@ -189,7 +394,7 @@ always @(posedge clk) begin
         csr_ecfg_lie <= 13'b0;
     else if (csr_we && csr_num==`CSR_ECFG)
         csr_ecfg_lie <= csr_wmask[`CSR_ECFG_LIE]&13'h1bff&csr_wvalue[`CSR_ECFG_LIE]
-                    | ~csr_wmask[`CSR_ECFG_LIE]&13'h1bff&csr_ecfg_lie;;
+                    | ~csr_wmask[`CSR_ECFG_LIE]&13'h1bff&csr_ecfg_lie;
  end
 assign csr_ecfg_data  = {19'b0, csr_ecfg_lie};
 
