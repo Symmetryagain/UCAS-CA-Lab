@@ -15,7 +15,6 @@ module IF (
         input   wire            flush,
         input   wire [31:0]     flush_target,
         // IF -> ID
-        // output  reg  [66:0]     IF_to_ID_reg,
         output  wire            IF_to_ID,
         output  wire [66:0]     IF_to_ID_zip,
         // ID -> IF

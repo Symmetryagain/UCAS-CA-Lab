@@ -41,7 +41,7 @@ module ID(
 assign ID_to_EX = readygo & EX_allowin;
 
 wire      is_csr;
-assign is_csr = inst_csrrd | inst_csrwr | inst_csrxchg | inst_rdcntid | inst_tlbrd;
+assign is_csr = inst_csrwr | inst_csrxchg | inst_rdcntid | inst_tlbrd | inst_tlbsrch;
 
 reg             at_state;
 always @(posedge clk) begin

@@ -48,7 +48,7 @@ module mycpu_top(
     output    [2:0]    awsize,
     output    [1:0]    awburst,
     output    [1:0]    awlock,
-    output    [1:0]    awcache,
+    output    [3:0]    awcache,
     output    [2:0]    awprot,
     output             awvalid,
     input              awready,

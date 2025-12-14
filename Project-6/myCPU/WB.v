@@ -119,5 +119,5 @@ assign wb_ecode    =    except_sys?  `ECODE_SYS:
 assign wb_esubcode = //inst_syscall ? `ESUBCODE_NONE : 
                         9'd0;
 
-assign tlbehi_wdata = {};
+// assign tlbehi_wdata = {};
 endmodule
