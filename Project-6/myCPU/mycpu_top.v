@@ -168,6 +168,18 @@ wire            flush;
 wire [31:0]     flush_target;
 wire            has_int;
 
+wire            inst_tlbrd;
+wire [31:0]     tlbehi_wdata;
+wire [31:0]     tlbelo0_wdata;
+wire [31:0]     tlbelo1_wdata;
+wire [31:0]     tlbidx_wdata;
+
+wire [31:0]     csr_estat_data;
+wire [31:0]     csr_tlbidx_data;
+wire [31:0]     csr_tlbehi_data;
+wire [31:0]     csr_tlbelo0_data;
+wire [31:0]     csr_tlbelo1_data;
+
 wire [  4:0]    IF_except_zip;
 wire [ 89:0]    ID_except_zip;
 wire [ 90:0]    EX_except_zip;
@@ -377,16 +389,19 @@ MEM u_MEM (
 WB u_WB (
     .clk            (clk),
     .rst            (reset),
+
+    .MEM_to_WB      (MEM_to_WB),
     .MEM_to_WB_zip  (MEM_to_WB_zip),
+    .MEM_except_zip (MEM_except_zip),
+    .WB_allowin     (WB_allowin),
+
     .rf_wen         (wb_rf_wen),
     .rf_waddr       (wb_rf_waddr),
     .rf_wdata_final (wb_rf_wdata),
     .inst_retire    (wb_inst_retire),
-    .WB_allowin     (WB_allowin),
-    .MEM_except_zip (MEM_except_zip),
+
     .csr_re         (csr_re),
     .csr_num        (csr_num),
-    .csr_rvalue     (csr_rvalue),
     .csr_we         (csr_we),
     .csr_wmask      (csr_wmask),
     .csr_wvalue     (csr_wvalue),
@@ -396,7 +411,13 @@ WB u_WB (
     .wb_ecode       (wb_ecode),
     .wb_esubcode    (wb_esubcode),
     .wb_vaddr       (wb_vaddr),
-    .MEM_to_WB      (MEM_to_WB)
+    .csr_rvalue     (csr_rvalue),
+
+    .inst_tlbrd     (inst_tlbrd),
+    .tlbehi_wdata   (tlbehi_wdata),
+    .tlbelo0_wdata  (tlbelo0_wdata),
+    .tlbelo1_wdata  (tlbelo1_wdata),
+    .tlbidx_wdata   (tlbidx_wdata)
 );
 
 // regfile instance
@@ -436,7 +457,19 @@ csr u_csr(
     .csr_dmw0_data(csr_dmw0_data),
     .csr_dmw1_data(csr_dmw1_data),
     .csr_asid_data(csr_asid_data),
-    .csr_crmd_data(csr_crmd_data)
+    .csr_crmd_data(csr_crmd_data),
+
+    .inst_tlbrd(inst_tlbrd),
+    .tlbehi_wdata(tlbehi_wdata),
+    .tlbelo0_wdata(tlbelo0_wdata),
+    .tlbelo1_wdata(tlbelo1_wdata),
+    .tlbidx_wdata (tlbidx_wdata),
+
+    .csr_estat_data(csr_estat_data),
+    .csr_tlbidx_data(csr_tlbidx_data),
+    .csr_tlbehi_data(csr_tlbehi_data),
+    .csr_tlbelo0_data(csr_tlbelo0_data),
+    .csr_tlbelo1_data(csr_tlbelo1_data)
 );
 
 assign flush = ertn_flush | wb_ex;
@@ -494,6 +527,23 @@ wire [1:0]  r_plv1;
 wire [1:0]  r_mat1;
 wire        r_d1;
 wire        r_v1;
+
+wire [3:0]  w_index;
+wire        w_e;
+wire [18:0] w_vppn;
+wire [5:0]  w_ps;
+wire [9:0]  w_asid;
+wire        w_g;
+wire [19:0] w_ppn0;
+wire [1:0]  w_plv0;
+wire [1:0]  w_mat0;
+wire        w_d0;
+wire        w_v0;
+wire [19:0] w_ppn1;
+wire [1:0]  w_plv1;
+wire [1:0]  w_mat1;
+wire        w_d1;
+wire        w_v1;
 
 // tlb instance
 tlb u_tlb(
