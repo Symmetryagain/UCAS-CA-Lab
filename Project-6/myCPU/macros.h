@@ -1,4 +1,4 @@
-`define PC_INIT 32'h1bffffff
+`define PC_INIT 32'h1bfffffc
 
 `define CSR_CRMD    14'h00
 `define CSR_PRMD    14'h01

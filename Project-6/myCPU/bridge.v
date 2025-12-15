@@ -367,20 +367,6 @@ assign awprot   = 3'b0;
 assign wid      = 4'b0001;
 assign wlast    = 1'b1;
 
-// always @(posedge aclk) begin
-//         if(reset)
-//             inst_rdata_reg <= 32'b0;
-//         else if(r_cur_state[1] & rvalid & rready & ~rid[0])
-//             inst_rdata_reg <= rdata;
-// end
-
-// always @(posedge aclk) begin
-//         if(reset)
-//             data_rdata_reg <= 32'b0;
-//         else if(r_cur_state[1] & rvalid & rready & rid[0])
-//             data_rdata_reg <= rdata;
-// end
-
 always @(posedge aclk) begin
         if(reset)
             rid_reg <= 4'b0;

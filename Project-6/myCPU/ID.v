@@ -105,7 +105,7 @@ wire            predict;
 wire [31:0]     pc;
 wire [31:0]     inst;
 assign {
-        IF_to_ID_valid, predict, inst, pc
+        IF_to_ID_valid, pc, inst, predict
 } = IF_to_ID_reg;
 
 wire [11:0]     alu_op;
@@ -347,32 +347,34 @@ assign  src_reg_is_rd   = inst_beq | inst_bne | inst_st_w | inst_st_b | inst_st_
 
 assign  src1_is_pc      = inst_jirl | inst_bl | inst_pcaddu12i;
 
-assign  src2_is_imm     = inst_slli_w |
-                          inst_srli_w |
-                          inst_srai_w |
-                          inst_addi_w |
-                          inst_ld_w   |
-                          inst_st_w   |
-                          inst_ld_b   |
-                          inst_ld_bu  |
-                          inst_ld_h   |
-                          inst_ld_hu  |
-                          inst_st_b   |
-                          inst_st_h   |
-                          inst_lu12i_w|
-                          inst_jirl   |
-                          inst_bl     |
-                          inst_slti   |
-                          inst_sltui  |
-                          inst_andi   |
-                          inst_ori    |
-                          inst_xori   |
-                          inst_pcaddu12i ;
+assign  src2_is_imm     = inst_slli_w   |
+                          inst_srli_w   |
+                          inst_srai_w   |
+                          inst_addi_w   |
+                          inst_ld_w     |
+                          inst_st_w     |
+                          inst_ld_b     |
+                          inst_ld_bu    |
+                          inst_ld_h     |
+                          inst_ld_hu    |
+                          inst_st_b     |
+                          inst_st_h     |
+                          inst_lu12i_w  |
+                          inst_jirl     |
+                          inst_bl       |
+                          inst_slti     |
+                          inst_sltui    |
+                          inst_andi     |
+                          inst_ori      |
+                          inst_xori     |
+                          inst_pcaddu12i;
 
-assign  res_from_mem    = inst_ld_w | inst_ld_b | inst_ld_bu |inst_ld_h | inst_ld_hu;
+assign  res_from_mem    = inst_ld_w | inst_ld_b | inst_ld_bu | inst_ld_h | inst_ld_hu;
 assign  dst_is_r1       = inst_bl;
 assign  gr_we           = ~inst_st_w & ~inst_st_b & ~inst_st_h &
-                          ~inst_beq & ~inst_bne & ~inst_b & ~inst_blt & ~inst_bge & ~inst_bltu & ~inst_bgeu;
+                          ~inst_beq & ~inst_bne & ~inst_b & ~inst_blt & ~inst_bge & ~inst_bltu & ~inst_bgeu &
+                          ~inst_ertn &
+                          ~inst_tlbsrch & ~inst_tlbrd & ~inst_tlbwr & ~inst_tlbfill & ~inst_invtlb;
 assign  mem_we          = inst_st_w | inst_st_b | inst_st_h;
 assign  dest            = dst_is_r1 ? 5'd1 : inst_rdcntid ? rj : rd;
 
@@ -421,7 +423,7 @@ assign except_ine  = ~( inst_add_w   | inst_sub_w  | inst_slt     | inst_sltu   
                         inst_mulhu   | inst_div    | inst_mod     | inst_divu    | inst_modu    | inst_blt       | inst_bge     | inst_bltu    |
                         inst_bgeu    | inst_ld_b   | inst_ld_h    | inst_ld_bu   | inst_ld_hu   | inst_st_b      | inst_st_h    |
                         inst_csrrd   | inst_csrwr  | inst_csrxchg | inst_ertn    | inst_syscall | inst_break     | inst_rdcntid | inst_rdcntvl | inst_rdcntvh |
-                        inst_tlbsrch | inst_tlbrd  | inst_tlbwr   | inst_tlbfill | inst_invtlb
+                        inst_tlbsrch | inst_tlbrd  | inst_tlbwr   | inst_tlbfill | inst_invtlb & ~(|rd[4:3]) & (rd[2:0] != 3'b111)
                         ) & valid;
 assign except_int  = has_int;
 

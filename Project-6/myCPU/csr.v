@@ -10,32 +10,33 @@ module csr(
         input   wire [31:0]     csr_wmask,
         input   wire [31:0]     csr_wvalue,
 
-        output wire             has_int,
-        input  wire             ertn_flush,
-        input  wire             wb_ex,  
-        input  wire  [31:0]     wb_pc,
-        input  wire  [31:0]     wb_vaddr,
-        input  wire  [ 5:0]     wb_ecode,  
-        input  wire  [ 8:0]     wb_esubcode,
-        output wire  [31:0]     csr_eentry_data,
-        output reg   [31:0]     csr_era_pc,
+        output  wire            has_int,
+        input   wire            ertn_flush,
+        input   wire            wb_ex,  
+        input   wire  [31:0]    wb_pc,
+        input   wire  [31:0]    wb_vaddr,
+        input   wire  [ 5:0]    wb_ecode,  
+        input   wire  [ 8:0]    wb_esubcode,
+        output  wire  [31:0]    csr_eentry_data,
+        output  reg   [31:0]    csr_era_pc,
 
-        output wire  [31:0]     csr_dmw0_data,
-        output wire  [31:0]     csr_dmw1_data,
-        output wire  [31:0]     csr_asid_data,
-        output wire  [31:0]     csr_crmd_data,
+        output  wire  [31:0]    csr_dmw0_data,
+        output  wire  [31:0]    csr_dmw1_data,
+        output  wire  [31:0]    csr_asid_data,
+        output  wire  [31:0]    csr_crmd_data,
 
-        input                   inst_tlbrd,
-        input        [31:0]     tlbehi_wdata,
-        input        [31:0]     tlbelo0_wdata,
-        input        [31:0]     tlbelo1_wdata,
-        input        [31:0]     tlbidx_wdata,
+        input   wire            inst_tlbrd,
+        input   wire  [31:0]    tlbehi_wdata,
+        input   wire  [31:0]    tlbelo0_wdata,
+        input   wire  [31:0]    tlbelo1_wdata,
+        input   wire  [31:0]    tlbidx_wdata,
+        input   wire  [31:0]    tlbasid_wdata,
         
-        output wire  [31:0]     csr_estat_data,
-        output wire  [31:0]     csr_tlbidx_data,
-        output wire  [31:0]     csr_tlbehi_data,
-        output wire  [31:0]     csr_tlbelo0_data,
-        output wire  [31:0]     csr_tlbelo1_data
+        output  wire  [31:0]    csr_estat_data,
+        output  wire  [31:0]    csr_tlbidx_data,
+        output  wire  [31:0]    csr_tlbehi_data,
+        output  wire  [31:0]    csr_tlbelo0_data,
+        output  wire  [31:0]    csr_tlbelo1_data
 );
 
 reg  [ 1: 0] csr_crmd_plv;      
@@ -233,13 +234,14 @@ assign csr_tlbelo1_data = {4'b0, csr_tlbelo1_ppn, 1'b0, csr_tlbelo1_g, csr_tlbel
 always @(posedge clk) begin
     if (reset) begin
         csr_asid_asid <= 10'b0;
-        csr_asid_asidbits <= 8'b0;
+        csr_asid_asidbits <= 8'h0a;
     end
     else if (csr_we && csr_num==`CSR_ASID) begin
         csr_asid_asid <= csr_wmask[`CSR_ASID_ASID]&csr_wvalue[`CSR_ASID_ASID]
                       | ~csr_wmask[`CSR_ASID_ASID]&csr_asid_asid;
-        csr_asid_asidbits <= csr_wmask[`CSR_ASID_ASIDBITS]&csr_wvalue[`CSR_ASID_ASIDBITS]
-                          | ~csr_wmask[`CSR_ASID_ASIDBITS]&csr_asid_asidbits;
+    end
+    else if (inst_tlbrd) begin
+        csr_asid_asid <= tlbasid_wdata[`CSR_ASID_ASID];
     end
  end
 assign csr_asid_data = {8'b0, csr_asid_asidbits, 6'b0, csr_asid_asid};
@@ -308,15 +310,6 @@ assign csr_dmw1_data = {csr_dmw1_vseg, 1'b0, csr_dmw1_pseg, 19'b0, csr_dmw1_mat,
 
 assign hw_int_in = 8'b0;
 assign ipi_int_in= 1'b0;
-
-// always @(posedge clk) begin
-//     if (reset) begin
-//         timer_cnt <= 32'hffffffff;
-//     end
-//     else begin
-//         timer_cnt <= timer_cnt - 1'b1;
-//     end
-// end
 
 assign has_int  = ((csr_estat_is[12:0] & csr_ecfg_lie[12:0]) != 13'b0) && (csr_crmd_ie == 1'b1);
 

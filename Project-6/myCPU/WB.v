@@ -55,6 +55,7 @@ module WB #(
         output  wire [31:0]     tlbelo0_wdata,
         output  wire [31:0]     tlbelo1_wdata,
         output  wire [31:0]     tlbidx_wdata,
+        output  wire [31:0]     tlbasid_wdata,
         // top -> WB
         /// csr
         input   wire [31:0]     csr_rvalue,
@@ -152,7 +153,7 @@ always @(posedge clk) begin
 end
 
 assign WB_allowin       = 1'b1;
-assign tlb_flush        = inst_tlbwr | inst_tlbfill | inst_invtlb;
+assign tlb_flush        = valid & (inst_tlbwr | inst_tlbfill | inst_invtlb);
 assign tlb_flush_target = pc + 32'h4;
 
 assign {
@@ -162,9 +163,9 @@ assign {
 
 assign {
         inst_ertn, 
-        except_adef, except_tlbr_if, except_pif, except_pme, except_ppi_if,
+        except_adef, except_tlbr_if, except_pif, except_ppi_if,
         except_sys, except_brk, except_ine, except_int, 
-        except_ale, except_tlbr_mem, except_pil, except_pis, except_ppi_mem,
+        except_ale, except_tlbr_mem, except_pil, except_pis, except_pme, except_ppi_mem,
         wb_vaddr
 } = MEM_except_reg;
 
@@ -231,5 +232,6 @@ assign tlbehi_wdata = r_e ? {r_vppn, 13'b0} : 32'b0;
 assign tlbelo0_wdata = r_e ? {4'b0, r_ppn0, 1'b0, r_g, r_mat0, r_plv0, r_d0, r_v0} : 32'b0;
 assign tlbelo1_wdata = r_e ? {4'b0, r_ppn1, 1'b0, r_g, r_mat1, r_plv1, r_d1, r_v1} : 32'b0;
 assign tlbidx_wdata = r_e ? {1'b0, 1'b0, r_ps, 8'b0, {LEN{1'b0}}, r_index} : {1'b1, 31'b0};
+assign tlbasid_wdata = r_e ? {22'b0, r_asid} : 32'b0;
 
 endmodule

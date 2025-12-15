@@ -30,6 +30,11 @@ module IF (
         input   wire [31:0]     ID_flush_target
 );
 
+reg             valid;
+always @(posedge clk) begin
+        valid <= ~rst;
+end
+
 wire            except_adef;
 wire            g_flush;
 wire            nxt_is_wait_addr_ok;
@@ -58,7 +63,7 @@ reg             readygo;
 reg  [31:0]     last_target;
 
 assign IF_to_ID         = readygo & ID_allowin;
-assign IF_to_ID_zip     = {~g_flush, pc, IR, predict};
+assign IF_to_ID_zip     = {valid & ~g_flush, pc, IR, predict};
 assign IF_except_zip    = {except_adef, except_tlbr, except_pif, except_ppi};
 assign inst_sram_en     = wait_addr_ok | lock_addr;
 assign pc_next          = flush ? flush_target : 

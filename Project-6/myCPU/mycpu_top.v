@@ -153,6 +153,7 @@ wire [31:0]     tlbehi_wdata;
 wire [31:0]     tlbelo0_wdata;
 wire [31:0]     tlbelo1_wdata;
 wire [31:0]     tlbidx_wdata;
+wire [31:0]     tlbasid_wdata;
 
 wire [31:0]     csr_estat_data;
 wire [31:0]     csr_tlbidx_data;
@@ -502,6 +503,8 @@ WB u_WB (
     .tlbelo0_wdata  (tlbelo0_wdata),
     .tlbelo1_wdata  (tlbelo1_wdata),
     .tlbidx_wdata   (tlbidx_wdata),
+    .tlbasid_wdata  (tlbasid_wdata),
+
     .we             (tlb_we),
     .w_index        (w_index),
     .w_e            (w_e),
@@ -551,42 +554,43 @@ regfile u_regfile (
 
 // csr instance
 csr u_csr(
-    .clk       (clk),
-    .reset     (~aresetn),
+    .clk        (clk),
+    .reset      (~aresetn),
 
-    .csr_re    (csr_re),
-    .csr_num   (csr_num),
-    .csr_rvalue(csr_rvalue),
-    .csr_we    (csr_we),
-    .csr_wmask (csr_wmask),
-    .csr_wvalue(csr_wvalue),
+    .csr_re     (csr_re),
+    .csr_num    (csr_num),
+    .csr_rvalue (csr_rvalue),
+    .csr_we     (csr_we),
+    .csr_wmask  (csr_wmask),
+    .csr_wvalue (csr_wvalue),
 
-    .has_int   (has_int),
-    .ertn_flush(ertn_flush), 
-    .wb_ex     (wb_ex),
-    .wb_pc     (wb_pc),
-    .wb_vaddr  (wb_vaddr), 
-    .wb_ecode  (wb_ecode),
+    .has_int    (has_int),
+    .ertn_flush (ertn_flush), 
+    .wb_ex      (wb_ex),
+    .wb_pc      (wb_pc),
+    .wb_vaddr   (wb_vaddr), 
+    .wb_ecode   (wb_ecode),
     .wb_esubcode(wb_esubcode),
-    .csr_eentry_data(csr_eentry_data),
+    .csr_eentry_data    (csr_eentry_data),
     .csr_era_pc (csr_era_pc),
 
-    .csr_dmw0_data(csr_dmw0_data),
-    .csr_dmw1_data(csr_dmw1_data),
-    .csr_asid_data(csr_asid_data),
-    .csr_crmd_data(csr_crmd_data),
+    .csr_dmw0_data      (csr_dmw0_data),
+    .csr_dmw1_data      (csr_dmw1_data),
+    .csr_asid_data      (csr_asid_data),
+    .csr_crmd_data      (csr_crmd_data),
 
-    .inst_tlbrd(inst_tlbrd),
-    .tlbehi_wdata(tlbehi_wdata),
-    .tlbelo0_wdata(tlbelo0_wdata),
-    .tlbelo1_wdata(tlbelo1_wdata),
-    .tlbidx_wdata (tlbidx_wdata),
+    .inst_tlbrd (inst_tlbrd),
+    .tlbehi_wdata       (tlbehi_wdata),
+    .tlbelo0_wdata      (tlbelo0_wdata),
+    .tlbelo1_wdata      (tlbelo1_wdata),
+    .tlbidx_wdata       (tlbidx_wdata),
+    .tlbasid_wdata      (tlbasid_wdata),
 
-    .csr_estat_data(csr_estat_data),
-    .csr_tlbidx_data(csr_tlbidx_data),
-    .csr_tlbehi_data(csr_tlbehi_data),
-    .csr_tlbelo0_data(csr_tlbelo0_data),
-    .csr_tlbelo1_data(csr_tlbelo1_data)
+    .csr_estat_data     (csr_estat_data),
+    .csr_tlbidx_data    (csr_tlbidx_data),
+    .csr_tlbehi_data    (csr_tlbehi_data),
+    .csr_tlbelo0_data   (csr_tlbelo0_data),
+    .csr_tlbelo1_data   (csr_tlbelo1_data)
 );
 
 assign flush = ertn_flush | wb_ex | tlb_flush;

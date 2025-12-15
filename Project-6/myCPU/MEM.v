@@ -83,7 +83,7 @@ always @(posedge clk) begin
 end
 
 wire            valid;
-assign valid =  EX_to_MEM_valid & at_state & ~flush;
+assign valid = EX_to_MEM_valid & at_state & ~flush;
 
 wire            EX_to_MEM_valid;
 wire [31:0]     pc;

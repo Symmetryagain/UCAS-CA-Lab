@@ -185,7 +185,6 @@ assign          compute_result  = inst_mul?                     prod[31:0]:
                                   inst_modu?                    udiv_result[31:0]:
                                   inst_rdcntvh?                 counter[63:32]:
                                   inst_rdcntvl?                 counter[31:0]:
-                                  inst_invtlb?                  src1:
                                   alu_result;
 
 wire            use_div;
@@ -227,7 +226,7 @@ assign mmu_en = valid & (res_from_mem | mem_we);
 
 assign invtlb_valid = valid & inst_invtlb;
 assign invtlb_op = rf_waddr;
-assign s1_asid = inst_invtlb?   alu_result     [`CSR_ASID_ASID  ] : 
+assign s1_asid = inst_invtlb?   src1           [`CSR_ASID_ASID  ] : 
                                 csr_asid_data  [`CSR_ASID_ASID  ] ;
 assign vaddr   = inst_invtlb?  {rkd_value      [`CSR_TLBEHI_VPPN] , 13'b0} : 
                  inst_tlbsrch? {csr_tlbehi_data[`CSR_TLBEHI_VPPN] , 13'b0} :
