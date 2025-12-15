@@ -101,9 +101,9 @@ wire            WB_allowin;
 
 // internal pipeline zipes
 wire [ 65:0]    IF_to_ID_zip;
-wire [203:0]    ID_to_EX_zip;
-wire [182:0]    EX_to_MEM_zip;
-wire [106:0]    MEM_to_WB_zip;
+wire [283:0]    ID_to_EX_zip;
+wire [262:0]    EX_to_MEM_zip;
+wire [186:0]    MEM_to_WB_zip;
 
 // IF <-> ID signals
 wire            ID_flush;
@@ -161,9 +161,9 @@ wire [31:0]     csr_tlbelo0_data;
 wire [31:0]     csr_tlbelo1_data;
 
 wire [  3:0]    IF_except_zip;
-wire [ 88:0]    ID_except_zip;
-wire [ 94:0]    EX_except_zip;
-wire [126:0]    MEM_except_zip;
+wire [  8:0]    ID_except_zip;
+wire [ 14:0]    EX_except_zip;
+wire [ 46:0]    MEM_except_zip;
 
 wire [31:0]     wb_vaddr;
 

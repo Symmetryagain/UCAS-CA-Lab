@@ -40,12 +40,13 @@
 `define CSR_TICLR_CLR   0
 
 `define CSR_ECFG_LIE    12:0
-`define CSR_ESTAT_IS10  1:0
 
 `define CSR_TCFG_EN     0
 `define CSR_TCFG_PERIOD 1
 `define CSR_TCFG_INITV  31:2
 `define CSR_TID_TID     31:0
+
+`define CSR_ESTAT_ECODE 21:16
 
 `define ESUBCODE_ADEF   9'b00
 `define ECODE_INT       6'h00
@@ -68,7 +69,7 @@
 
 `define CSR_TLBEHI_VPPN  31:13
 
-`define CSR_TLBELO_PPN   31:8
+`define CSR_TLBELO_PPN   27:8
 `define CSR_TLBELO_G     6
 `define CSR_TLBELO_MAT   5:4
 `define CSR_TLBELO_PLV   3:2

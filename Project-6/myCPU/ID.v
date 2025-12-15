@@ -21,8 +21,8 @@ module ID(
         input   wire            has_int,
         // ID -> EX
         output  wire            ID_to_EX,
-        output  wire [203:0]    ID_to_EX_zip,
-        output  wire [ 88:0]    ID_except_zip,
+        output  wire [283:0]    ID_to_EX_zip,
+        output  wire [  8:0]    ID_except_zip,
         // EX -> ID
         input   wire            EX_allowin,
         input   wire            front_from_EX_valid,
@@ -405,8 +405,8 @@ assign  br_target       = (inst_beq | inst_bne | inst_bl | inst_b | inst_blt | i
 assign  ID_flush        = ((br_taken ^ predict) | inst_jirl) & ~rst & valid;
 
 assign csr_re       = inst_csrrd | inst_csrwr   | inst_csrxchg | inst_rdcntid;
-assign csr_we       = inst_csrwr | inst_csrxchg | inst_tlbsrch | inst_tlbrd;
-assign csr_wmask    = {32{inst_csrxchg}} & rj_value | {32{inst_csrwr}} | {32{inst_tlbsrch}} | {32{inst_tlbrd}};
+assign csr_we       = inst_csrwr | inst_csrxchg | inst_tlbsrch;
+assign csr_wmask    = {32{inst_csrxchg}} & rj_value | {32{inst_csrwr}} | {32{inst_tlbsrch}} & 32'h80000000;
 assign csr_wvalue   = rkd_value;
 assign csr_num      = inst_rdcntid ? `CSR_TID :
                       inst_tlbsrch ? `CSR_TLBIDX:
@@ -434,11 +434,11 @@ assign ID_to_EX_zip = {
         mem_we, res_from_mem, gr_we, rkd_value, dest,
         inst_mul, inst_mulh, inst_mulhu, inst_div, inst_mod, inst_divu, inst_modu, 
         inst_rdcntvh, inst_rdcntvl, is_csr,
-        inst_tlbsrch, inst_tlbrd, inst_tlbwr, inst_tlbfill, inst_invtlb
+        inst_tlbsrch, inst_tlbrd, inst_tlbwr, inst_tlbfill, inst_invtlb,
+        csr_re, csr_we, csr_wmask, csr_wvalue, csr_num
 };
 
 assign ID_except_zip = {
-        csr_re, csr_we, csr_wmask, csr_wvalue, csr_num, 
         inst_ertn, IF_except_reg, except_sys, except_brk, except_ine, except_int
 };
 

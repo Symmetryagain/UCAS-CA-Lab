@@ -1,24 +1,35 @@
-module MEM(
+`include "macros.h"
+
+module MEM #(
+        parameter TLBNUM = 16,
+        parameter LEN = 16 - $clog2(TLBNUM)
+) (
         input   wire            clk,
         input   wire            rst,
         // MEM -> EX
         output  wire            MEM_allowin,
         // EX -> MEM
         input   wire            EX_to_MEM,
-        input   wire [182:0]    EX_to_MEM_zip,
-        input   wire [ 94:0]    EX_except_zip,
+        input   wire [262:0]    EX_to_MEM_zip,
+        input   wire [ 14:0]    EX_except_zip,
         // MEM -> WB
         output  wire            MEM_to_WB,
-        output  wire [106:0]    MEM_to_WB_zip,
-        output  wire [126:0]    MEM_except_zip,
+        output  wire [186:0]    MEM_to_WB_zip,
+        output  wire [ 46:0]    MEM_except_zip,
         // WB -> MEM
         input   wire            WB_allowin,
         // MEM -> top
+        /// mem
         output  wire            write_en,
         output  wire [  3:0]    write_we,
         output  wire [  1:0]    write_size,
         output  wire [ 31:0]    write_addr,
         output  wire [ 31:0]    write_data,
+        /// mmu
+        output  wire            invtlb_valid,
+        output  wire [  4:0]    invtlb_op,
+        output  wire [  9:0]    asid,
+        output  wire [ 18:0]    vppn,
         // top -> MEM
         /// data_sram
         input   wire            data_sram_addr_ok,
@@ -30,6 +41,10 @@ module MEM(
         input   wire [ 31:0]    csr_asid_data,
         input   wire [ 31:0]    csr_tlbehi_data,
         input   wire [ 31:0]    csr_tlbidx_data,
+        /// mmu
+        input   wire            tlb_found,
+        input   wire [$clog2(TLBNUM)-1:0]       tlb_index,
+
         // MEM -> ID
         output  wire            front_valid,
         output  wire [  4:0]    front_addr,
@@ -39,10 +54,10 @@ module MEM(
         output  wire            MEM_is_load
 );
 
-reg  [182:0]    EX_to_MEM_reg;
+reg  [262:0]    EX_to_MEM_reg;
 always @(posedge clk) begin
         if (rst) begin
-                EX_to_MEM_reg <= 183'b0;
+                EX_to_MEM_reg <= 263'b0;
         end
         else if (EX_to_MEM) begin
                 EX_to_MEM_reg <= EX_to_MEM_zip;
@@ -52,10 +67,10 @@ always @(posedge clk) begin
         end
 end
 
-reg  [ 94:0]    EX_except_reg;
+reg  [ 14:0]    EX_except_reg;
 always @(posedge clk) begin
         if (rst) begin
-                EX_except_reg <= 95'b0;
+                EX_except_reg <= 15'b0;
         end
         else if (EX_to_MEM) begin
                 EX_except_reg <= EX_except_zip;
@@ -122,6 +137,12 @@ wire            inst_tlbwr;
 wire            inst_tlbfill;
 wire            inst_invtlb;
 
+wire            csr_re;
+wire [13:0]     csr_num;
+wire            csr_we;
+wire [31:0]     csr_wmask;
+wire [31:0]     csr_wvalue;
+
 assign front_valid = valid & gr_we;
 assign front_addr = rf_waddr;
 assign front_data = rf_wdata;
@@ -151,7 +172,7 @@ always @(posedge clk) begin
         if (rst | flush) begin
                 wait_addr_ok <= 1'b0;
         end
-        else if (init & valid & (res_from_mem | mem_we) & ~(|EX_except_reg[4:0])) begin
+        else if (init & valid & (res_from_mem | mem_we) & ~(|EX_except_reg)) begin
                 wait_addr_ok <= 1'b1;
         end
         else if (wait_addr_ok & data_sram_addr_ok) begin
@@ -181,7 +202,7 @@ always @(posedge clk) begin
         if (rst | flush) begin
                 readygo <= 1'b0;
         end
-        else if (init & valid & (~res_from_mem & ~mem_we | (|EX_except_reg[4:0])) | wait_data_ok & data_sram_data_ok) begin
+        else if (init & valid & (~res_from_mem & ~mem_we | (|EX_except_reg)) | wait_data_ok & data_sram_data_ok) begin
                 readygo <= 1'b1;
         end
         else if (readygo & WB_allowin) begin
@@ -199,11 +220,17 @@ assign  {
         inst_ld_b, inst_ld_bu, inst_ld_h, inst_ld_hu, inst_ld_w, 
         inst_st_b, inst_st_h, inst_st_w, 
         mem_we, res_from_mem, gr_we, rkd_value, rf_waddr, alu_result, is_csr, write_addr,
-        inst_tlbsrch, inst_tlbrd, inst_tlbwr, inst_tlbfill, inst_invtlb
+        inst_tlbsrch, inst_tlbrd, inst_tlbwr, inst_tlbfill, inst_invtlb,
+        csr_re, csr_we, csr_wmask, csr_wvalue, csr_num
 } = EX_to_MEM_reg;
 
 assign MEM_is_csr = valid & is_csr;
 assign MEM_is_load = valid & res_from_mem;
+
+assign invtlb_valid = inst_invtlb;
+assign invtlb_op = rf_waddr;
+assign asid = inst_invtlb? alu_result[`CSR_ASID_ASID  ] : csr_asid_data  [`CSR_ASID_ASID  ];
+assign vppn = inst_invtlb? rkd_value [`CSR_TLBEHI_VPPN] : csr_tlbehi_data[`CSR_TLBEHI_VPPN];
 
 assign rf_wdata_ld_b    = (write_addr[1:0]==2'b00)? {{24{read_data[ 7]}},read_data[ 7: 0]}:
                           (write_addr[1:0]==2'b01)? {{24{read_data[15]}},read_data[15: 8]}:
@@ -250,7 +277,11 @@ assign write_data       = inst_st_b? {4{rkd_value[7:0]}}:
 
 assign MEM_to_WB_zip = {
         valid, pc, IR, gr_we, rf_waddr, rf_wdata, 
-        inst_tlbrd, inst_tlbwr, inst_tlbfill, inst_invtlb
+        inst_tlbrd, inst_tlbwr, inst_tlbfill, inst_invtlb,
+        csr_re, csr_we, 
+        csr_wmask | {16'b0, {16{inst_tlbsrch & tlb_found}}}, 
+        inst_tlbsrch ? {~tlb_found, 15'b0, {LEN{1'b0}}, tlb_index} : csr_wvalue,
+        csr_num
 };
 assign MEM_except_zip = {EX_except_reg, alu_result};
 
