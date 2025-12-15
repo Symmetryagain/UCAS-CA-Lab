@@ -1,12 +1,15 @@
 `include "macros.h"
 
-module WB(
+module WB #(
+        parameter TLBNUM = 16,
+        parameter LEN = 16 - $clog2(TLBNUM)
+)(
         input   wire            clk,
         input   wire            rst,
         // MEM -> WB
         input   wire            MEM_to_WB,
-        input   wire [106:0]    MEM_to_WB_zip,
-        input   wire [126:0]    MEM_except_zip,
+        input   wire [186:0]    MEM_to_WB_zip,
+        input   wire [ 46:0]    MEM_except_zip,
         // WB -> MEM
         output  wire            WB_allowin,
         // WB -> top
@@ -27,14 +30,56 @@ module WB(
         output  wire [31:0]     wb_vaddr,
         output  wire            tlb_flush,
         output  wire [31:0]     tlb_flush_target,
-        // top -> WB
-        input   wire [31:0]     csr_rvalue,
-
+        /// tlb
+        output                  we, //w(rite) e(nable)
+        output  [$clog2(TLBNUM)-1:0]    w_index,
+        output                  w_e,
+        output  [ 18:0]         w_vppn,
+        output  [ 5:0]          w_ps,
+        output  [ 9:0]          w_asid,
+        output                  w_g,
+        output  [ 19:0]         w_ppn0,
+        output  [ 1:0]          w_plv0,
+        output  [ 1:0]          w_mat0,
+        output                  w_d0,
+        output                  w_v0,
+        output  [ 19:0]         w_ppn1,
+        output  [ 1:0]          w_plv1,
+        output  [ 1:0]          w_mat1,
+        output                  w_d1,
+        output                  w_v1,
+        output  [$clog2(TLBNUM)-1:0]    r_index,
+        /// csr
         output  wire            inst_tlbrd,
         output  wire [31:0]     tlbehi_wdata,
         output  wire [31:0]     tlbelo0_wdata,
         output  wire [31:0]     tlbelo1_wdata,
-        output  wire [31:0]     tlbidx_wdata
+        output  wire [31:0]     tlbidx_wdata,
+        // top -> WB
+        /// csr
+        input   wire [31:0]     csr_rvalue,
+        input   wire [31:0]     csr_estat_data,
+        input   wire [31:0]     csr_tlbidx_data,
+        input   wire [31:0]     csr_tlbehi_data,
+        input   wire [31:0]     csr_tlbelo0_data,
+        input   wire [31:0]     csr_tlbelo1_data,
+        input   wire [31:0]     csr_asid_data,
+        /// tlb
+        input                   r_e,
+        input   [ 18:0]         r_vppn,
+        input   [ 5:0]          r_ps,
+        input   [ 9:0]          r_asid,
+        input                   r_g,
+        input   [ 19:0]         r_ppn0,
+        input   [ 1:0]          r_plv0,
+        input   [ 1:0]          r_mat0,
+        input                   r_d0,
+        input                   r_v0,
+        input   [ 19:0]         r_ppn1,
+        input   [ 1:0]          r_plv1,
+        input   [ 1:0]          r_mat1,
+        input                   r_d1,
+        input                   r_v1
 );
 
 wire            valid;
@@ -44,10 +89,10 @@ wire            inst_tlbwr;
 wire            inst_tlbfill;
 wire            inst_invtlb;
 
-reg  [106:0]    MEM_to_WB_reg;
+reg  [186:0]    MEM_to_WB_reg;
 always @(posedge clk) begin
         if (rst) begin
-                MEM_to_WB_reg <= 107'b0;
+                MEM_to_WB_reg <= 187'b0;
         end
         else if (MEM_to_WB) begin
                 MEM_to_WB_reg <= MEM_to_WB_zip;
@@ -57,10 +102,10 @@ always @(posedge clk) begin
         end
 end
 
-reg  [126:0]    MEM_except_reg;
+reg  [ 46:0]    MEM_except_reg;
 always @(posedge clk) begin
         if (rst) begin
-                MEM_except_reg <= 127'b0;
+                MEM_except_reg <= 47'b0;
         end
         else if (MEM_to_WB) begin
                 MEM_except_reg <= MEM_except_zip;
@@ -107,11 +152,11 @@ assign WB_allowin       = 1'b1;
 assign tlb_flush        = inst_tlbwr | inst_tlbfill | inst_invtlb;
 
 assign {
-    MEM_to_WB_valid, pc, IR, gr_we, rf_waddr, rf_wdata, inst_tlbrd, inst_tlbwr, inst_tlbfill, inst_invtlb
+    MEM_to_WB_valid, pc, IR, gr_we, rf_waddr, rf_wdata, inst_tlbrd, inst_tlbwr, inst_tlbfill, inst_invtlb,
+    csr_re, csr_we, csr_wmask, csr_wvalue, csr_num
 } = MEM_to_WB_reg;
 
 assign {
-        csr_re, csr_we, csr_wmask, csr_wvalue, csr_num, 
         inst_ertn, 
         except_adef, except_tlbr_if, except_pif, except_pme, except_ppi_if,
         except_sys, except_brk, except_ine, except_int, 
@@ -150,4 +195,39 @@ assign wb_esubcode      = //inst_syscall ? `ESUBCODE_NONE :
                                 9'd0;
 
 // assign tlbehi_wdata = {};
+
+reg  [$clog2(TLBNUM)-1:0]       tlb_fill_idx;
+always @(posedge clk) begin
+        if (rst) begin
+                tlb_fill_idx <= 0;
+        end
+        else begin
+                tlb_fill_idx <= tlb_fill_idx + 1;
+        end
+end
+
+assign we = valid & (inst_tlbwr | inst_tlbfill);
+assign w_index = inst_tlbfill ? tlb_fill_idx : csr_tlbidx_data[$clog2(TLBNUM)-1:0];
+assign w_e = csr_estat_data[`CSR_ESTAT_ECODE] == `ECODE_TLBR ? 1'b1 : ~csr_tlbidx_data[`CSR_TLBIDX_NE];
+assign w_vppn = csr_tlbehi_data[`CSR_TLBEHI_VPPN];
+assign w_ps = csr_tlbidx_data[`CSR_TLBIDX_PS];
+assign w_asid = csr_asid_data[`CSR_ASID_ASID];
+assign w_g = csr_tlbelo0_data[`CSR_TLBELO_G] & csr_tlbelo1_data[`CSR_TLBELO_G];
+assign w_ppn0 = csr_tlbelo0_data[`CSR_TLBELO_PPN];
+assign w_plv0 = csr_tlbelo0_data[`CSR_TLBELO_PLV];
+assign w_mat0 = csr_tlbelo0_data[`CSR_TLBELO_MAT];
+assign w_d0 = csr_tlbelo0_data[`CSR_TLBELO_D];
+assign w_v0 = csr_tlbelo0_data[`CSR_TLBELO_V];
+assign w_ppn1 = csr_tlbelo1_data[`CSR_TLBELO_PPN];
+assign w_plv1 = csr_tlbelo1_data[`CSR_TLBELO_PLV];
+assign w_mat1 = csr_tlbelo1_data[`CSR_TLBELO_MAT];
+assign w_d1 = csr_tlbelo1_data[`CSR_TLBELO_D];
+assign w_v1 = csr_tlbelo1_data[`CSR_TLBELO_V];
+
+assign r_index = csr_tlbidx_data[$clog2(TLBNUM)-1:0];
+assign tlbehi_wdata = r_e ? {r_vppn, 13'b0} : 32'b0;
+assign tlbelo0_wdata = r_e ? {4'b0, r_ppn0, 1'b0, r_g, r_mat0, r_plv0, r_d0, r_v0} : 32'b0;
+assign tlbelo1_wdata = r_e ? {4'b0, r_ppn1, 1'b0, r_g, r_mat1, r_plv1, r_d1, r_v1} : 32'b0;
+assign tlbidx_wdata = r_e ? {1'b0, 1'b0, r_ps, 8'b0, {LEN{1'b0}}, r_index} : {1'b1, 31'b0};
+
 endmodule
