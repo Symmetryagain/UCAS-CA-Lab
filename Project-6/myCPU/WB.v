@@ -153,6 +153,7 @@ end
 
 assign WB_allowin       = 1'b1;
 assign tlb_flush        = inst_tlbwr | inst_tlbfill | inst_invtlb;
+assign tlb_flush_target = pc + 32'h4;
 
 assign {
     MEM_to_WB_valid, pc, IR, gr_we, rf_waddr, rf_wdata, inst_tlbrd, inst_tlbwr, inst_tlbfill, inst_invtlb,

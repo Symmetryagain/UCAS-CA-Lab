@@ -113,7 +113,7 @@ end
 
 always @(posedge clk) begin
         if (rst) begin
-                wait_addr_ok <= 1'b1;
+                wait_addr_ok <= 1'b0;
         end
         else if (nxt_is_wait_addr_ok) begin
                 wait_addr_ok <= 1'b1;
@@ -142,7 +142,10 @@ always @(posedge clk) begin
 end
 
 always @(posedge clk) begin
-        if (rst | g_flush) begin
+        if (rst) begin
+                readygo <= 1'b1;
+        end
+        else if (g_flush) begin
                 readygo <= 1'b0;
         end
         else if (wait_data_ok & inst_sram_data_ok) begin
