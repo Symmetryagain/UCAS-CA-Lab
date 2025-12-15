@@ -166,6 +166,7 @@ wire [ 14:0]    EX_except_zip;
 wire [ 46:0]    MEM_except_zip;
 
 wire [31:0]     wb_vaddr;
+wire [31:0]     ex_vaddr;
 
 wire            IF_to_ID;
 wire            ID_to_EX;
@@ -405,16 +406,25 @@ EX u_EX (
 
     .MEM_allowin    (MEM_allowin),
 
-    .mmu_en        (mmu_en),
-    .mem_we        (mem_we),
-    .alu_result    (vaddr_ex),
+    .mmu_en         (mmu_en),
+    .mem_we         (mem_we),
+    .csr_asid_data  (csr_asid_data),
+    .csr_tlbehi_data(csr_tlbehi_data),
+    .csr_tlbidx_data(csr_tlbidx_data),
+    .invtlb_valid   (invtlb_valid),
+    .invtlb_op      (invtlb_op),
 
-    .addr_trans      (addr_trans),
-    .except_tlbr     (except_tlbr_mem),
-    .except_pil      (except_pil),
-    .except_pis      (except_pis),
-    .except_pme      (except_pme),
-    .except_ppi      (except_ppi_mem),
+    .addr_trans     (addr_trans),
+    .except_tlbr    (except_tlbr_mem),
+    .except_pil     (except_pil),
+    .except_pis     (except_pis),
+    .except_pme     (except_pme),
+    .except_ppi     (except_ppi_mem),
+
+    .vaddr          (ex_vaddr),
+    .s1_asid        (s1_asid),
+    .s1_found       (s1_found),
+    .s1_index       (s1_index),
     
     .flush          (flush),
     .counter        (counter)
@@ -446,10 +456,7 @@ MEM u_MEM (
     .EX_to_MEM      (EX_to_MEM),
     .MEM_to_WB      (MEM_to_WB),
     .MEM_is_csr     (MEM_is_csr),
-    .MEM_is_load    (MEM_is_load),
-    .csr_asid_data  (csr_asid_data),
-    .csr_tlbehi_data(csr_tlbehi_data),
-    .csr_tlbidx_data(csr_tlbidx_data)
+    .MEM_is_load    (MEM_is_load)
 );
 
 // WB instance
@@ -478,15 +485,56 @@ WB u_WB (
     .wb_ecode       (wb_ecode),
     .wb_esubcode    (wb_esubcode),
     .wb_vaddr       (wb_vaddr),
+
     .csr_rvalue     (csr_rvalue),
+    .csr_estat_data (csr_estat_data),
+    .csr_tlbidx_data    (csr_tlbidx_data),
+    .csr_tlbehi_data    (csr_tlbehi_data),
+    .csr_tlbelo0_data   (csr_tlbelo0_data),
+    .csr_tlbelo1_data   (csr_tlbelo1_data),
+    .csr_asid_data  (csr_asid_data),
+
     .tlb_flush      (tlb_flush),
     .tlb_flush_target   (tlb_flush_target),
 
-    .inst_tlbrd     (inst_tlbrd),
+    .tlbrd          (inst_tlbrd),
     .tlbehi_wdata   (tlbehi_wdata),
     .tlbelo0_wdata  (tlbelo0_wdata),
     .tlbelo1_wdata  (tlbelo1_wdata),
-    .tlbidx_wdata   (tlbidx_wdata)
+    .tlbidx_wdata   (tlbidx_wdata),
+    .we             (tlb_we),
+    .w_index        (w_index),
+    .w_e            (w_e),
+    .w_vppn         (w_vppn),
+    .w_ps           (w_ps),
+    .w_asid         (w_asid),
+    .w_g            (w_g),
+    .w_ppn0         (w_ppn0),
+    .w_plv0         (w_plv0),
+    .w_mat0         (w_mat0),
+    .w_d0           (w_d0),
+    .w_v0           (w_v0),
+    .w_ppn1         (w_ppn1),
+    .w_plv1         (w_plv1),
+    .w_mat1         (w_mat1),
+    .w_d1           (w_d1), 
+    .w_v1           (w_v1),
+    .r_index        (r_index),
+    .r_e            (r_e),
+    .r_vppn         (r_vppn),
+    .r_ps           (r_ps),
+    .r_asid         (r_asid),
+    .r_g            (r_g),
+    .r_ppn0         (r_ppn0),
+    .r_plv0         (r_plv0),
+    .r_mat0         (r_mat0),
+    .r_d0           (r_d0),
+    .r_v0           (r_v0),
+    .r_ppn1         (r_ppn1),
+    .r_plv1         (r_plv1),
+    .r_mat1         (r_mat1),
+    .r_d1           (r_d1),
+    .r_v1           (r_v1)
 );
 
 // regfile instance
@@ -586,7 +634,7 @@ mmu u_inst_mmu(
 mmu u_data_mmu(
     .mem_we         (mem_we),
     .mmu_en         (mmu_en),
-    .vaddr          (vaddr_ex),
+    .vaddr          (ex_vaddr),
     .paddr          (addr_trans),
     .s_vppn         (s1_vppn),
     .s_va_bit12     (s1_va_bit12),

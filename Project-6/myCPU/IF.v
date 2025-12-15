@@ -198,4 +198,16 @@ always @(posedge clk) begin
         end
 end
 
+always @(posedge clk) begin
+        if (rst) begin
+                pc_paddr <= 32'b0;
+        end
+        else if (nxt_is_wait_addr_ok) begin
+                pc_paddr <= pc_trans;
+        end
+        else begin
+                pc_paddr <= pc_paddr;
+        end
+end
+
 endmodule

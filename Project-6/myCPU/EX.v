@@ -1,4 +1,9 @@
-module EX(
+`include "macros.h"
+
+module EX #(
+        parameter TLBNUM = 16,
+        parameter LEN = 16 - $clog2(TLBNUM)
+) (
         input   wire            clk,
         input   wire            rst,
         // EX -> ID
@@ -21,7 +26,11 @@ module EX(
         // EX -> top
         output  wire            mmu_en,
         output  wire            mem_we,
-        output  wire [ 31:0]    alu_result,
+        /// mmu
+        output  wire            invtlb_valid,
+        output  wire [  4:0]    invtlb_op,
+        output  wire [  9:0]    s1_asid,
+        output  wire [ 31:0]    vaddr,
         // top -> EX
         /// mmu
         input   wire [ 31:0]    addr_trans,
@@ -30,8 +39,14 @@ module EX(
         input   wire            except_pis,
         input   wire            except_pme,
         input   wire            except_ppi,
+        input   wire            s1_found,
+        input   wire [$clog2(TLBNUM)-1:0]       s1_index,
         /// flush
         input   wire            flush,
+        /// csr
+        input   wire [ 31:0]    csr_asid_data,
+        input   wire [ 31:0]    csr_tlbehi_data,
+        input   wire [ 31:0]    csr_tlbidx_data,
         /// counter
         input   wire [ 63:0]    counter
 );
@@ -89,6 +104,7 @@ wire [31:0]     IR;
 wire [31:0]     src1;
 wire [31:0]     src2;
 wire [11:0]     aluop;
+wire [31:0]     alu_result;
 
 wire            inst_ld_w;
 wire            inst_ld_b;
@@ -209,6 +225,14 @@ assign udiv_res_ready = wait_res_valid;
 
 assign mmu_en = valid & (res_from_mem | mem_we);
 
+assign invtlb_valid = valid & inst_invtlb;
+assign invtlb_op = rf_waddr;
+assign s1_asid = inst_invtlb?   alu_result     [`CSR_ASID_ASID  ] : 
+                                csr_asid_data  [`CSR_ASID_ASID  ] ;
+assign vaddr   = inst_invtlb?  {rkd_value      [`CSR_TLBEHI_VPPN] , 13'b0} : 
+                 inst_tlbsrch? {csr_tlbehi_data[`CSR_TLBEHI_VPPN] , 13'b0} :
+                                alu_result                                 ;
+
 reg             init;
 reg             wait_src_ready;
 reg             wait_res_valid;
@@ -312,7 +336,10 @@ assign EX_to_MEM_zip = {
         mem_we, res_from_mem, gr_we, rkd_value, rf_waddr,
         compute_result, is_csr, addr_trans,
         inst_tlbsrch, inst_tlbrd, inst_tlbwr, inst_tlbfill, inst_invtlb,
-        csr_re, csr_we, csr_wmask, csr_wvalue, csr_num
+        csr_re, csr_we, 
+        csr_wmask | {16'b0, {16{inst_tlbsrch & s1_found}}}, 
+        inst_tlbsrch ? {~s1_found, 15'b0, {LEN{1'b0}}, s1_index} : csr_wvalue,
+        csr_num
 };
 
 assign EX_except_zip = {ID_except_reg, except_ale, except_tlbr, except_pil, except_pis, except_pme, except_ppi};

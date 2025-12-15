@@ -50,7 +50,7 @@ module WB #(
         output                  w_v1,
         output  [$clog2(TLBNUM)-1:0]    r_index,
         /// csr
-        output  wire            inst_tlbrd,
+        output  wire            tlbrd,
         output  wire [31:0]     tlbehi_wdata,
         output  wire [31:0]     tlbelo0_wdata,
         output  wire [31:0]     tlbelo1_wdata,
@@ -85,9 +85,12 @@ module WB #(
 wire            valid;
 assign valid = MEM_to_WB_valid & at_state;
 
+wire            inst_tlbrd;
 wire            inst_tlbwr;
 wire            inst_tlbfill;
 wire            inst_invtlb;
+
+assign tlbrd = valid & inst_tlbrd;
 
 reg  [186:0]    MEM_to_WB_reg;
 always @(posedge clk) begin
@@ -193,8 +196,6 @@ assign wb_ecode         = except_int?     `ECODE_INT:
                           6'b0;
 assign wb_esubcode      = //inst_syscall ? `ESUBCODE_NONE : 
                                 9'd0;
-
-// assign tlbehi_wdata = {};
 
 reg  [$clog2(TLBNUM)-1:0]       tlb_fill_idx;
 always @(posedge clk) begin

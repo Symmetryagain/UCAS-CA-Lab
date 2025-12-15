@@ -1,9 +1,4 @@
-`include "macros.h"
-
-module MEM #(
-        parameter TLBNUM = 16,
-        parameter LEN = 16 - $clog2(TLBNUM)
-) (
+module MEM (
         input   wire            clk,
         input   wire            rst,
         // MEM -> EX
@@ -25,11 +20,7 @@ module MEM #(
         output  wire [  1:0]    write_size,
         output  wire [ 31:0]    write_addr,
         output  wire [ 31:0]    write_data,
-        /// mmu
-        output  wire            invtlb_valid,
-        output  wire [  4:0]    invtlb_op,
-        output  wire [  9:0]    asid,
-        output  wire [ 18:0]    vppn,
+
         // top -> MEM
         /// data_sram
         input   wire            data_sram_addr_ok,
@@ -37,13 +28,6 @@ module MEM #(
         input   wire [ 31:0]    read_data,
         /// flush
         input   wire            flush,
-        /// csr
-        input   wire [ 31:0]    csr_asid_data,
-        input   wire [ 31:0]    csr_tlbehi_data,
-        input   wire [ 31:0]    csr_tlbidx_data,
-        /// mmu
-        input   wire            tlb_found,
-        input   wire [$clog2(TLBNUM)-1:0]       tlb_index,
 
         // MEM -> ID
         output  wire            front_valid,
@@ -227,11 +211,6 @@ assign  {
 assign MEM_is_csr = valid & is_csr;
 assign MEM_is_load = valid & res_from_mem;
 
-assign invtlb_valid = inst_invtlb;
-assign invtlb_op = rf_waddr;
-assign asid = inst_invtlb? alu_result[`CSR_ASID_ASID  ] : csr_asid_data  [`CSR_ASID_ASID  ];
-assign vppn = inst_invtlb? rkd_value [`CSR_TLBEHI_VPPN] : csr_tlbehi_data[`CSR_TLBEHI_VPPN];
-
 assign rf_wdata_ld_b    = (write_addr[1:0]==2'b00)? {{24{read_data[ 7]}},read_data[ 7: 0]}:
                           (write_addr[1:0]==2'b01)? {{24{read_data[15]}},read_data[15: 8]}:
 			  (write_addr[1:0]==2'b10)? {{24{read_data[23]}},read_data[23:16]}:
@@ -278,10 +257,7 @@ assign write_data       = inst_st_b? {4{rkd_value[7:0]}}:
 assign MEM_to_WB_zip = {
         valid, pc, IR, gr_we, rf_waddr, rf_wdata, 
         inst_tlbrd, inst_tlbwr, inst_tlbfill, inst_invtlb,
-        csr_re, csr_we, 
-        csr_wmask | {16'b0, {16{inst_tlbsrch & tlb_found}}}, 
-        inst_tlbsrch ? {~tlb_found, 15'b0, {LEN{1'b0}}, tlb_index} : csr_wvalue,
-        csr_num
+        csr_re, csr_we, csr_wmask, csr_wvalue, csr_num
 };
 assign MEM_except_zip = {EX_except_reg, alu_result};
 

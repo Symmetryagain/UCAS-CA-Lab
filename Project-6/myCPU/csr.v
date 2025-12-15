@@ -85,14 +85,14 @@ reg  [5:0]   csr_tlbidx_ps;
 
 reg  [18:0]  csr_tlbehi_vppn;
 
-reg  [23:0]  csr_tlbelo0_ppn;
+reg  [19:0]  csr_tlbelo0_ppn;
 reg  [ 1:0]  csr_tlbelo0_plv;
 reg  [ 1:0]  csr_tlbelo0_mat;
 reg          csr_tlbelo0_g;
 reg          csr_tlbelo0_d;
 reg          csr_tlbelo0_v;
 
-reg  [23:0]  csr_tlbelo1_ppn;
+reg  [19:0]  csr_tlbelo1_ppn;
 reg  [ 1:0]  csr_tlbelo1_plv;   
 reg  [ 1:0]  csr_tlbelo1_mat;
 reg          csr_tlbelo1_g;
@@ -160,7 +160,7 @@ always @(posedge clk) begin
 // TLBELO0
 always @(posedge clk) begin
     if(reset) begin
-        csr_tlbelo0_ppn <= 24'b0;
+        csr_tlbelo0_ppn <= 20'b0;
         csr_tlbelo0_plv <= 2'b0;
         csr_tlbelo0_mat <= 2'b0;
         csr_tlbelo0_g   <= 1'b0;
@@ -196,7 +196,7 @@ assign csr_tlbelo0_data = {4'b0, csr_tlbelo0_ppn, 1'b0, csr_tlbelo0_g, csr_tlbel
 // TLBELO1
 always @(posedge clk) begin
     if(reset) begin
-        csr_tlbelo1_ppn <= 24'b0;
+        csr_tlbelo1_ppn <= 20'b0;
         csr_tlbelo1_plv <= 2'b0;
         csr_tlbelo1_mat <= 2'b0;
         csr_tlbelo1_g   <= 1'b0;
