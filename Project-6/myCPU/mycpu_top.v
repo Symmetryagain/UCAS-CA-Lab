@@ -638,7 +638,7 @@ mmu u_data_mmu(
     .paddr          (addr_trans),
     .s_vppn         (s1_vppn),
     .s_va_bit12     (s1_va_bit12),
-    .s_asid         (s1_asid),
+    .s_asid         (),
     .s_found        (s1_found),
     .s_index        (s1_index),
     .s_ppn          (s1_ppn),
