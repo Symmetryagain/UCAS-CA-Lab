@@ -209,6 +209,8 @@ wire            except_ppi_mem;
 
 wire            mem_we;
 wire            mmu_en;
+wire [31:0]     vaddr_ex;
+wire [31:0]     addr_trans;
 
 wire [31:0] csr_dmw0_data;
 wire [31:0] csr_dmw1_data;
@@ -404,21 +406,36 @@ ID u_ID (
 EX u_EX (
     .clk            (clk),
     .rst            (reset),
-    .ID_to_EX_zip   (ID_to_EX_zip),
-    .EX_to_MEM_zip  (EX_to_MEM_zip),
-    .EX_allowin     (EX_allowin),
-    .MEM_allowin    (MEM_allowin),
+
     .front_valid    (EX_front_valid),
     .front_addr     (EX_front_addr),
     .front_data     (EX_front_data),
-    .flush          (flush),
-    .ID_except_zip  (ID_except_zip),
-    .EX_except_zip  (EX_except_zip),
-    .counter        (counter),
-    .ID_to_EX       (ID_to_EX),
-    .EX_to_MEM      (EX_to_MEM),
+    .EX_allowin     (EX_allowin),
     .EX_is_csr      (EX_is_csr),
-    .EX_is_load     (EX_is_load)
+    .EX_is_load     (EX_is_load),
+
+    .ID_to_EX       (ID_to_EX),
+    .ID_to_EX_zip   (ID_to_EX_zip),
+    .ID_except_zip  (ID_except_zip),
+    .EX_to_MEM      (EX_to_MEM),
+    .EX_to_MEM_zip  (EX_to_MEM_zip),
+    .EX_except_zip  (EX_except_zip),
+
+    .MEM_allowin    (MEM_allowin),
+
+    .mmu_en        (mmu_en),
+    .mem_we        (mem_we),
+    .alu_result    (vaddr_ex),
+
+    .addr_trans      (addr_trans),
+    .except_tlbr     (except_tlbr_mem),
+    .except_pil      (except_pil),
+    .except_pis      (except_pis),
+    .except_pme      (except_pme),
+    .except_ppi      (except_ppi_mem),
+    
+    .flush          (flush),
+    .counter        (counter)
 );
 
 // MEM instance
@@ -582,8 +599,8 @@ mmu u_inst_mmu(
 mmu u_data_mmu(
     .mem_we         (mem_we),
     .mmu_en         (mmu_en),
-    .vaddr          (data_sram_addr),
-    .paddr          (),
+    .vaddr          (vaddr_ex),
+    .paddr          (addr_trans),
     .s_vppn         (s1_vppn),
     .s_va_bit12     (s1_va_bit12),
     .s_asid         (s1_asid),
