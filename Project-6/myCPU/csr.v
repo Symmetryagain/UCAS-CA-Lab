@@ -35,7 +35,7 @@ module csr(
         output wire  [31:0]     csr_tlbidx_data,
         output wire  [31:0]     csr_tlbehi_data,
         output wire  [31:0]     csr_tlbelo0_data,
-        output wire  [31:0]     csr_tlbelo1_data,
+        output wire  [31:0]     csr_tlbelo1_data
 );
 
 reg  [ 1: 0] csr_crmd_plv;      

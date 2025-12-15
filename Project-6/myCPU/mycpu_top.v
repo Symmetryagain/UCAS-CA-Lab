@@ -168,6 +168,18 @@ wire            flush;
 wire [31:0]     flush_target;
 wire            has_int;
 
+wire            inst_tlbrd;
+wire [31:0]     tlbehi_wdata;
+wire [31:0]     tlbelo0_wdata;
+wire [31:0]     tlbelo1_wdata;
+wire [31:0]     tlbidx_wdata;
+
+wire [31:0]     csr_estat_data;
+wire [31:0]     csr_tlbidx_data;
+wire [31:0]     csr_tlbehi_data;
+wire [31:0]     csr_tlbelo0_data;
+wire [31:0]     csr_tlbelo1_data;
+
 wire [  3:0]    IF_except_zip;
 wire [ 88:0]    ID_except_zip;
 wire [ 94:0]    EX_except_zip;
@@ -376,16 +388,19 @@ MEM u_MEM (
 WB u_WB (
     .clk            (clk),
     .rst            (reset),
+
+    .MEM_to_WB      (MEM_to_WB),
     .MEM_to_WB_zip  (MEM_to_WB_zip),
+    .MEM_except_zip (MEM_except_zip),
+    .WB_allowin     (WB_allowin),
+
     .rf_wen         (wb_rf_wen),
     .rf_waddr       (wb_rf_waddr),
     .rf_wdata_final (wb_rf_wdata),
     .inst_retire    (wb_inst_retire),
-    .WB_allowin     (WB_allowin),
-    .MEM_except_zip (MEM_except_zip),
+
     .csr_re         (csr_re),
     .csr_num        (csr_num),
-    .csr_rvalue     (csr_rvalue),
     .csr_we         (csr_we),
     .csr_wmask      (csr_wmask),
     .csr_wvalue     (csr_wvalue),
@@ -395,7 +410,13 @@ WB u_WB (
     .wb_ecode       (wb_ecode),
     .wb_esubcode    (wb_esubcode),
     .wb_vaddr       (wb_vaddr),
-    .MEM_to_WB      (MEM_to_WB)
+    .csr_rvalue     (csr_rvalue),
+
+    .inst_tlbrd     (inst_tlbrd),
+    .tlbehi_wdata   (tlbehi_wdata),
+    .tlbelo0_wdata  (tlbelo0_wdata),
+    .tlbelo1_wdata  (tlbelo1_wdata),
+    .tlbidx_wdata   (tlbidx_wdata)
 );
 
 // regfile instance
@@ -435,7 +456,19 @@ csr u_csr(
     .csr_dmw0_data(csr_dmw0_data),
     .csr_dmw1_data(csr_dmw1_data),
     .csr_asid_data(csr_asid_data),
-    .csr_crmd_data(csr_crmd_data)
+    .csr_crmd_data(csr_crmd_data),
+
+    .inst_tlbrd(inst_tlbrd),
+    .tlbehi_wdata(tlbehi_wdata),
+    .tlbelo0_wdata(tlbelo0_wdata),
+    .tlbelo1_wdata(tlbelo1_wdata),
+    .tlbidx_wdata (tlbidx_wdata),
+
+    .csr_estat_data(csr_estat_data),
+    .csr_tlbidx_data(csr_tlbidx_data),
+    .csr_tlbehi_data(csr_tlbehi_data),
+    .csr_tlbelo0_data(csr_tlbelo0_data),
+    .csr_tlbelo1_data(csr_tlbelo1_data)
 );
 
 assign flush = ertn_flush | wb_ex;
@@ -477,128 +510,102 @@ wire [1:0]  s1_mat;
 wire        s1_d;
 wire        s1_v;
 
-// inst mmu instance
-mmu u_inst_mmu(
-    .mem_we         (1'b0),
-    .mmu_en         (1'b1),
-    .vaddr          (pc_next),
-    .paddr          (pc_trans),
-    .s_vppn         (s0_vppn),
-    .s_va_bit12     (s0_va_bit12),
-    .s_asid         (s0_asid),
-    .s_found        (s0_found),
-    .s_index        (s0_index),
-    .s_ppn          (s0_ppn),
-    .s_ps           (s0_ps),     
-    .s_plv          (s0_plv),
-    .s_mat          (s0_mat),
-    .s_d            (s0_d),
-    .s_v            (s0_v),
+wire [3:0]  r_index;
+wire        r_e;
+wire [18:0] r_vppn;
+wire [5:0]  r_ps;
+wire [9:0]  r_asid;
+wire        r_g;
+wire [19:0] r_ppn0;
+wire [1:0]  r_plv0;
+wire [1:0]  r_mat0;
+wire        r_d0;
+wire        r_v0;
+wire [19:0] r_ppn1;
+wire [1:0]  r_plv1;
+wire [1:0]  r_mat1;
+wire        r_d1;
+wire        r_v1;
 
-    .csr_asid_data  (csr_asid_data),
-    .csr_crmd_data  (csr_crmd_data),
-    .csr_dmw0_data  (csr_dmw0_data),
-    .csr_dmw1_data  (csr_dmw1_data),
-
-    .except_tlbr    (except_tlbr_if),
-    .except_pif     (except_pif),
-    .except_pil     (),
-    .except_pis     (),
-    .except_pme     (),
-    .except_ppi     (except_ppi_if)
-);
-
-// data mmu instance
-mmu u_data_mmu(
-    .mem_we         (mem_we),
-    .mmu_en         (mmu_en),
-    .vaddr          (data_sram_addr),
-    .paddr          (),
-    .s_vppn         (s1_vppn),
-    .s_va_bit12     (s1_va_bit12),
-    .s_asid         (s1_asid),
-    .s_found        (s1_found),
-    .s_index        (s1_index),
-    .s_ppn          (s1_ppn),
-    .s_ps           (s1_ps),     
-    .s_plv          (s1_plv),
-    .s_mat          (s1_mat),
-    .s_d            (s1_d),
-    .s_v            (s1_v),
-
-    .csr_asid_data  (csr_asid_data),
-    .csr_crmd_data  (csr_crmd_data),
-    .csr_dmw0_data  (csr_dmw0_data),
-    .csr_dmw1_data  (csr_dmw1_data),
-
-    .except_tlbr    (except_tlbr_mem),
-    .except_pif     (),
-    .except_pil     (except_pil),
-    .except_pis     (except_pis),
-    .except_pme     (except_pme),
-    .except_ppi     (except_ppi_mem)
-);
+wire [3:0]  w_index;
+wire        w_e;
+wire [18:0] w_vppn;
+wire [5:0]  w_ps;
+wire [9:0]  w_asid;
+wire        w_g;
+wire [19:0] w_ppn0;
+wire [1:0]  w_plv0;
+wire [1:0]  w_mat0;
+wire        w_d0;
+wire        w_v0;
+wire [19:0] w_ppn1;
+wire [1:0]  w_plv1;
+wire [1:0]  w_mat1;
+wire        w_d1;
+wire        w_v1;
 
 // tlb instance
 tlb u_tlb(
     .clk            (clk),
-    .s0_vppn        (),
-    .s0_va_bit12    (ID_to_EX_zip[179]),
-    .s0_asid        (ID_to_EX_zip[178:169]),
-    .s0_found       (),
-    .s0_index       (),
-    .s0_ppn         (),
-    .s0_ps          (),     
-    .s0_plv         (),
-    .s0_mat         (),
-    .s0_d           (),
-    .s0_v           (),
-    .s1_vppn        (EX_to_MEM_zip[145:127]),
-    .s1_va_bit12    (EX_to_MEM_zip[126]),
-    .s1_asid        (EX_to_MEM_zip[125:116]),
-    .s1_found       (),
-    .s1_index       (),
-    .s1_ppn         (),
-    .s1_ps          (),     
-    .s1_plv         (),
-    .s1_mat         (),
-    .s1_d           (),
-    .s1_v           (),
-    .invtlb_valid   (ID_to_EX_zip[168]),    
-    .invtlb_op      (ID_to_EX_zip[167:163]),
-    .we             (MEM_to_WB_zip[102]),
-    .w_index        (MEM_to_WB_zip[101:98]),
-    .w_e            (MEM_to_WB_zip[97]),
-    .w_vppn         (MEM_to_WB_zip[96:78]),
-    .w_ps           (MEM_to_WB_zip[77:72]),
-    .w_asid         (MEM_to_WB_zip[71:62]),
-    .w_g            (MEM_to_WB_zip[61]),
-    .w_ppn0         (MEM_to_WB_zip[60:41]),
-    .w_plv0         (MEM_to_WB_zip[40:39]),
-    .w_mat0         (MEM_to_WB_zip[38:37]),
-    .w_d0           (MEM_to_WB_zip[36]),
-    .w_v0           (MEM_to_WB_zip[35]),
-    .w_ppn1         (MEM_to_WB_zip[34:15]),
-    .w_plv1         (MEM_to_WB_zip[14:13]),
-    .w_mat1         (MEM_to_WB_zip[12:11]),
-    .w_d1           (MEM_to_WB_zip[10]), 
-    .w_v1           (MEM_to_WB_zip[9]),
-    .r_index        (ID_to_EX_zip[162:159]),
-    .r_e            (),
-    .r_vppn         (),
-    .r_ps           (),
-    .r_asid         (),
-    .r_g            (),
-    .r_ppn0         (),
-    .r_plv0         (),
-    .r_mat0         (),
-    .r_d0           (),
-    .r_v0           (),
-    .r_ppn1         (),
-    .r_plv1         (),
-    .r_mat1         (),
-    .r_d1           (),
-    .r_v1           ()   
+    .s0_vppn        (s0_vppn),
+    .s0_va_bit12    (s0_va_bit12),
+    .s0_asid        (s0_asid),
+    .s0_found       (s0_found),
+    .s0_index       (s0_index),
+    .s0_ppn         (s0_ppn),
+    .s0_ps          (s0_ps),     
+    .s0_plv         (s0_plv),
+    .s0_mat         (s0_mat),
+    .s0_d           (s0_d),
+    .s0_v           (s0_v),
+
+    .s1_vppn        (s1_vppn),
+    .s1_va_bit12    (s1_va_bit12),
+    .s1_asid        (s1_asid),
+    .s1_found       (s1_found),
+    .s1_index       (s1_index),
+    .s1_ppn         (s1_ppn),
+    .s1_ps          (s1_ps),     
+    .s1_plv         (s1_plv),
+    .s1_mat         (s1_mat),
+    .s1_d           (s1_d),
+    .s1_v           (s1_v),
+
+    .invtlb_valid   (),    
+    .invtlb_op      (),
+    .we             (),
+    .w_index        (),
+    .w_e            (),
+    .w_vppn         (),
+    .w_ps           (),
+    .w_asid         (),
+    .w_g            (),
+    .w_ppn0         (),
+    .w_plv0         (),
+    .w_mat0         (),
+    .w_d0           (),
+    .w_v0           (),
+    .w_ppn1         (),
+    .w_plv1         (),
+    .w_mat1         (),
+    .w_d1           (), 
+    .w_v1           (),
+    .r_index        (r_index),
+    .r_e            (r_e),
+    .r_vppn         (r_vppn),
+    .r_ps           (r_ps),
+    .r_asid         (r_asid),
+    .r_g            (r_g),
+    .r_ppn0         (r_ppn0),
+    .r_plv0         (r_plv0),
+    .r_mat0         (r_mat0),
+    .r_d0           (r_d0),
+    .r_v0           (r_v0),
+    .r_ppn1         (r_ppn1),
+    .r_plv1         (r_plv1),
+    .r_mat1         (r_mat1),
+    .r_d1           (r_d1),
+    .r_v1           (r_v1)   
 );
 
 // inst_retire_reg format: { pc(32), {4{rf_wen}}(4), rf_waddr(5), rf_wdata(32) }
