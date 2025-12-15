@@ -18,17 +18,17 @@ module mmu(
         input  wire             s_d,
         input  wire             s_v,
 
-        input  wire [31:0]  csr_asid_data,
-        input  wire [31:0]  csr_crmd_data,
-        input  wire [31:0]  csr_dmw0_data,
-        input  wire [31:0]  csr_dmw1_data,
+        input  wire [31:0]      csr_asid_data,
+        input  wire [31:0]      csr_crmd_data,
+        input  wire [31:0]      csr_dmw0_data,
+        input  wire [31:0]      csr_dmw1_data,
 
-        output wire         except_tlbr,
-        output wire         except_pif,
-        output wire         except_pis,
-        output wire         except_pil,
-        output wire         except_pme,
-        output wire         except_ppi
+        output wire             except_tlbr,
+        output wire             except_pif,
+        output wire             except_pis,
+        output wire             except_pil,
+        output wire             except_pme,
+        output wire             except_ppi
 );
 wire            csr_crmd_da, csr_crmd_pg;
 wire  [4:0]     csr_crmd_plv;

@@ -1,69 +1,69 @@
 module tlb #(
         parameter TLBNUM = 16
 ) (
-        input                   clk,
+        input   wire            clk,
         // search port 0 (for fetch)
-        input   [ 18:0]         s0_vppn,
-        input                   s0_va_bit12,
-        input   [ 9:0]          s0_asid,
-        output                  s0_found,
-        output  [$clog2(TLBNUM)-1:0]    s0_index,
-        output  [ 19:0]         s0_ppn,
-        output  [ 5:0]          s0_ps,
-        output  [ 1:0]          s0_plv,
-        output  [ 1:0]          s0_mat,
-        output                  s0_d,
-        output                  s0_v,
+        input   wire [ 18:0]    s0_vppn,
+        input   wire            s0_va_bit12,
+        input   wire [ 9:0]     s0_asid,
+        output  wire            s0_found,
+        output  wire [$clog2(TLBNUM)-1:0]       s0_index,
+        output  wire [ 19:0]    s0_ppn,
+        output  wire [ 5:0]     s0_ps,
+        output  wire [ 1:0]     s0_plv,
+        output  wire [ 1:0]     s0_mat,
+        output  wire            s0_d,
+        output  wire            s0_v,
         // search port 1 (for load/store)
-        input   [ 18:0]         s1_vppn,
-        input                   s1_va_bit12,
-        input   [ 9:0]          s1_asid,
-        output                  s1_found,
-        output  [$clog2(TLBNUM)-1:0]    s1_index,
-        output  [ 19:0]         s1_ppn,
-        output  [ 5:0]          s1_ps,
-        output  [ 1:0]          s1_plv,
-        output  [ 1:0]          s1_mat,
-        output                  s1_d,
-        output                  s1_v,
+        input   wire [ 18:0]    s1_vppn,
+        input   wire            s1_va_bit12,
+        input   wire [ 9:0]     s1_asid,
+        output  wire            s1_found,
+        output  wire [$clog2(TLBNUM)-1:0]       s1_index,
+        output  wire [ 19:0]    s1_ppn,
+        output  wire [ 5:0]     s1_ps,
+        output  wire [ 1:0]     s1_plv,
+        output  wire [ 1:0]     s1_mat,
+        output  wire            s1_d,
+        output  wire            s1_v,
         // invtlb opcode
-        input                   invtlb_valid,    
-        input   [ 4:0]          invtlb_op,
+        input   wire            invtlb_valid,    
+        input   wire [ 4:0]     invtlb_op,
         // write port
-        input                   we, //w(rite) e(nable)
-        input   [$clog2(TLBNUM)-1:0]    w_index,
-        input                   w_e,
-        input   [ 18:0]         w_vppn,
-        input   [ 5:0]          w_ps,
-        input   [ 9:0]          w_asid,
-        input                   w_g,
-        input   [ 19:0]         w_ppn0,
-        input   [ 1:0]          w_plv0,
-        input   [ 1:0]          w_mat0,
-        input                   w_d0,
-        input                   w_v0,
-        input   [ 19:0]         w_ppn1,
-        input   [ 1:0]          w_plv1,
-        input   [ 1:0]          w_mat1,
-        input                   w_d1,
-        input                   w_v1,
+        input   wire            we, //w(rite) e(nable)
+        input   wire [$clog2(TLBNUM)-1:0]       w_index,
+        input   wire            w_e,
+        input   wire [ 18:0]    w_vppn,
+        input   wire [ 5:0]     w_ps,
+        input   wire [ 9:0]     w_asid,
+        input   wire            w_g,
+        input   wire [ 19:0]    w_ppn0,
+        input   wire [ 1:0]     w_plv0,
+        input   wire [ 1:0]     w_mat0,
+        input   wire            w_d0,
+        input   wire            w_v0,
+        input   wire [ 19:0]    w_ppn1,
+        input   wire [ 1:0]     w_plv1,
+        input   wire [ 1:0]     w_mat1,
+        input   wire            w_d1,
+        input   wire            w_v1,
         // read port
-        input   [$clog2(TLBNUM)-1:0]    r_index,
-        output                  r_e,
-        output  [ 18:0]         r_vppn,
-        output  [ 5:0]          r_ps,
-        output  [ 9:0]          r_asid,
-        output                  r_g,
-        output  [ 19:0]         r_ppn0,
-        output  [ 1:0]          r_plv0,
-        output  [ 1:0]          r_mat0,
-        output                  r_d0,
-        output                  r_v0,
-        output  [ 19:0]         r_ppn1,
-        output  [ 1:0]          r_plv1,
-        output  [ 1:0]          r_mat1,
-        output                  r_d1,
-        output                  r_v1
+        input   wire [$clog2(TLBNUM)-1:0]       r_index,
+        output  wire            r_e,
+        output  wire [ 18:0]    r_vppn,
+        output  wire [ 5:0]     r_ps,
+        output  wire [ 9:0]     r_asid,
+        output  wire            r_g,
+        output  wire [ 19:0]    r_ppn0,
+        output  wire [ 1:0]     r_plv0,
+        output  wire [ 1:0]     r_mat0,
+        output  wire            r_d0,
+        output  wire            r_v0,
+        output  wire [ 19:0]    r_ppn1,
+        output  wire [ 1:0]     r_plv1,
+        output  wire [ 1:0]     r_mat1,
+        output  wire            r_d1,
+        output  wire            r_v1
 );
 
 reg [TLBNUM-1:0]        tlb_e;
@@ -127,6 +127,8 @@ assign r_mat1 = tlb_mat1[r_index];
 assign r_d1 = tlb_d1[r_index];
 assign r_v1 = tlb_v1[r_index];
 
+
+
 genvar i;
 generate
         for (i = 0; i < 16; i = i + 1) begin
@@ -177,6 +179,10 @@ assign s0_plv = (tlb_ps4MB[s0_index] & s0_vppn[8] | ~tlb_ps4MB[s0_index] & s0_va
 assign s0_mat = (tlb_ps4MB[s0_index] & s0_vppn[8] | ~tlb_ps4MB[s0_index] & s0_va_bit12) ? tlb_mat1[s0_index] : tlb_mat0[s0_index];
 assign s0_d   = (tlb_ps4MB[s0_index] & s0_vppn[8] | ~tlb_ps4MB[s0_index] & s0_va_bit12) ? tlb_d1[s0_index]   : tlb_d0[s0_index];
 assign s0_v   = (tlb_ps4MB[s0_index] & s0_vppn[8] | ~tlb_ps4MB[s0_index] & s0_va_bit12) ? tlb_v1[s0_index]   : tlb_v0[s0_index];
+
+
+
+
 
 assign s1_index = {4{match1[ 0]}} & 4'b0000 |
                   {4{match1[ 1]}} & 4'b0001 |
