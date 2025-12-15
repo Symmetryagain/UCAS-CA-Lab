@@ -20,6 +20,11 @@ module csr(
         output wire  [31:0]     csr_eentry_data,
         output reg   [31:0]     csr_era_pc,
 
+        output wire  [31:0]     csr_dmw0_data,
+        output wire  [31:0]     csr_dmw1_data,
+        output wire  [31:0]     csr_asid_data,
+        output wire  [31:0]     csr_crmd_data,
+
         input                   inst_tlbrd,
         input        [31:0]     tlbehi_wdata,
         input        [31:0]     tlbelo0_wdata,
@@ -31,11 +36,8 @@ module csr(
         output wire  [31:0]     csr_tlbehi_data,
         output wire  [31:0]     csr_tlbelo0_data,
         output wire  [31:0]     csr_tlbelo1_data,
-        output wire  [31:0]     csr_asid_data
-
 );
 
-wire [31: 0] csr_crmd_data;
 reg  [ 1: 0] csr_crmd_plv;      
 reg          csr_crmd_ie;       
 reg          csr_crmd_da;       
@@ -108,14 +110,12 @@ reg    csr_dmw0_plv3;
 reg  [1:0] csr_dmw0_mat;
 reg  [2:0] csr_dmw0_pseg;
 reg  [2:0] csr_dmw0_vseg;
-wire [31:0] csr_dmw0_data;
 
 reg    csr_dmw1_plv0;
 reg    csr_dmw1_plv3;
 reg  [1:0] csr_dmw1_mat;
 reg  [2:0] csr_dmw1_pseg;
 reg  [2:0] csr_dmw1_vseg;
-wire [31:0] csr_dmw1_data;
 
 // TLBIDX
 always @(posedge clk) begin

@@ -186,10 +186,17 @@ wire            MEM_is_load;
 
 wire [31:0]     pc_next;
 wire [31:0]     pc_trans;
-wire            except_tlbr;
+wire            except_tlbr_if;
+wire            except_tlbr_mem;
 wire            except_pif;
+wire            except_pil;
+wire            except_pis;
 wire            except_pme;
-wire            except_ppi;
+wire            except_ppi_if;
+wire            except_ppi_mem;
+
+wire            mem_we;
+wire            mmu_en;
 
 // AXI bridge instance
 bridge u_bridge (
@@ -277,10 +284,10 @@ IF u_IF (
     .IF_to_ID       (IF_to_ID),
     .pc_next        (pc_next),
     .pc_trans       (pc_trans),
-    .except_tlbr    (except_tlbr),
+    .except_tlbr    (except_tlbr_if),
     .except_pif     (except_pif),
     .except_pme     (except_pme),
-    .except_ppi     (except_ppi)
+    .except_ppi     (except_ppi_if)
 );
 
 // ID instance
@@ -424,7 +431,12 @@ csr u_csr(
     .wb_ecode  (wb_ecode),
     .wb_esubcode(wb_esubcode),
     .csr_eentry_data(csr_eentry_data),
-    .csr_era_pc (csr_era_pc)
+    .csr_era_pc (csr_era_pc),
+
+    .csr_dmw0_data(csr_dmw0_data),
+    .csr_dmw1_data(csr_dmw1_data),
+    .csr_asid_data(csr_asid_data),
+    .csr_crmd_data(csr_crmd_data)
 );
 
 assign flush = ertn_flush | wb_ex;
@@ -437,10 +449,101 @@ assign inst_sram_wr    = | inst_sram_wstrb;
 assign inst_sram_size  = 2'b10;
 assign data_sram_wr    = | data_sram_wstrb;
 
+wire [31:0] csr_dmw0_data;
+wire [31:0] csr_dmw1_data;
+wire [31:0] csr_asid_data;
+wire [31:0] csr_crmd_data;
+
+wire [18:0] s0_vppn;
+wire        s0_va_bit12;
+wire [9:0]  s0_asid;
+wire        s0_found;
+wire [3:0]  s0_index;
+wire [19:0] s0_ppn;
+wire [5:0]  s0_ps;     
+wire [1:0]  s0_plv;
+wire [1:0]  s0_mat;
+wire        s0_d;
+wire        s0_v;
+
+wire [18:0] s1_vppn;
+wire        s1_va_bit12;
+wire [9:0]  s1_asid;
+wire        s1_found;
+wire [3:0]  s1_index;
+wire [19:0] s1_ppn;
+wire [5:0]  s1_ps;     
+wire [1:0]  s1_plv;
+wire [1:0]  s1_mat;
+wire        s1_d;
+wire        s1_v;
+
+// inst mmu instance
+mmu u_inst_mmu(
+    .mem_we         (1'b0),
+    .mmu_en         (1'b1),
+    .vaddr          (pc_next),
+    .paddr          (pc_trans),
+    .s_vppn         (s0_vppn),
+    .s_va_bit12     (s0_va_bit12),
+    .s_asid         (s0_asid),
+    .s_found        (s0_found),
+    .s_index        (s0_index),
+    .s_ppn          (s0_ppn),
+    .s_ps           (s0_ps),     
+    .s_plv          (s0_plv),
+    .s_mat          (s0_mat),
+    .s_d            (s0_d),
+    .s_v            (s0_v),
+
+    .csr_asid_data  (csr_asid_data),
+    .csr_crmd_data  (csr_crmd_data),
+    .csr_dmw0_data  (csr_dmw0_data),
+    .csr_dmw1_data  (csr_dmw1_data),
+
+    .except_tlbr    (except_tlbr_if),
+    .except_pif     (except_pif),
+    .except_pil     (),
+    .except_pis     (),
+    .except_pme     (),
+    .except_ppi     (except_ppi_if)
+);
+
+// data mmu instance
+mmu u_data_mmu(
+    .mem_we         (mem_we),
+    .mmu_en         (mmu_en),
+    .vaddr          (data_sram_addr),
+    .paddr          (),
+    .s_vppn         (s1_vppn),
+    .s_va_bit12     (s1_va_bit12),
+    .s_asid         (s1_asid),
+    .s_found        (s1_found),
+    .s_index        (s1_index),
+    .s_ppn          (s1_ppn),
+    .s_ps           (s1_ps),     
+    .s_plv          (s1_plv),
+    .s_mat          (s1_mat),
+    .s_d            (s1_d),
+    .s_v            (s1_v),
+
+    .csr_asid_data  (csr_asid_data),
+    .csr_crmd_data  (csr_crmd_data),
+    .csr_dmw0_data  (csr_dmw0_data),
+    .csr_dmw1_data  (csr_dmw1_data),
+
+    .except_tlbr    (except_tlbr_mem),
+    .except_pif     (),
+    .except_pil     (except_pil),
+    .except_pis     (except_pis),
+    .except_pme     (except_pme),
+    .except_ppi     (except_ppi_mem)
+);
+
 // tlb instance
 tlb u_tlb(
     .clk            (clk),
-    .s0_vppn        (ID_to_EX_zip[198:180]),
+    .s0_vppn        (),
     .s0_va_bit12    (ID_to_EX_zip[179]),
     .s0_asid        (ID_to_EX_zip[178:169]),
     .s0_found       (),
