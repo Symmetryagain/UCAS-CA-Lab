@@ -24,14 +24,22 @@ module csr(
         input        [31:0]     tlbehi_wdata,
         input        [31:0]     tlbelo0_wdata,
         input        [31:0]     tlbelo1_wdata,
-        input        [31:0]     tlbidx_wdata
+        input        [31:0]     tlbidx_wdata,
+        
+        output wire  [31:0]     csr_estat_data,
+        output wire  [31:0]     csr_tlbidx_data,
+        output wire  [31:0]     csr_tlbehi_data,
+        output wire  [31:0]     csr_tlbelo0_data,
+        output wire  [31:0]     csr_tlbelo1_data,
+        output wire  [31:0]     csr_asid_data
+
 );
 
 wire [31: 0] csr_crmd_data;
 reg  [ 1: 0] csr_crmd_plv;      
 reg          csr_crmd_ie;       
-wire         csr_crmd_da;       
-wire         csr_crmd_pg;
+reg          csr_crmd_da;       
+reg          csr_crmd_pg;
 wire [ 6: 5] csr_crmd_datf;
 wire [ 8: 7] csr_crmd_datm;
 
@@ -39,7 +47,6 @@ wire [31: 0] csr_prmd_data;
 reg  [ 1: 0] csr_prmd_pplv;     
 reg          csr_prmd_pie; 
 
-wire [31: 0] csr_estat_data;    
 reg  [12: 0] csr_estat_is;      
 reg  [ 5: 0] csr_estat_ecode;   
 reg  [ 8: 0] csr_estat_esubcode;
@@ -70,12 +77,47 @@ wire [31:0]  csr_tcfg_data;
 wire         csr_ticlr_clr;
 wire [31:0]  csr_ticlr_data;
 
-// TLBIDX
 reg  [15:0]  csr_tlbidx_index;
 reg          csr_tlbidx_ne;
 reg  [5:0]   csr_tlbidx_ps;
-wire [31:0]  csr_tlbidx_data;
 
+reg  [18:0]  csr_tlbehi_vppn;
+
+reg  [23:0]  csr_tlbelo0_ppn;
+reg  [ 1:0]  csr_tlbelo0_plv;
+reg  [ 1:0]  csr_tlbelo0_mat;
+reg          csr_tlbelo0_g;
+reg          csr_tlbelo0_d;
+reg          csr_tlbelo0_v;
+
+reg  [23:0]  csr_tlbelo1_ppn;
+reg  [ 1:0]  csr_tlbelo1_plv;   
+reg  [ 1:0]  csr_tlbelo1_mat;
+reg          csr_tlbelo1_g;
+reg          csr_tlbelo1_d;
+reg          csr_tlbelo1_v;
+
+reg  [9:0]   csr_asid_asid;
+reg  [7:0]   csr_asid_asidbits;
+
+reg  [25:0]  csr_tlbrentry_pa;
+wire [31:0]  csr_tlbrentry_data;
+
+reg    csr_dmw0_plv0;
+reg    csr_dmw0_plv3;
+reg  [1:0] csr_dmw0_mat;
+reg  [2:0] csr_dmw0_pseg;
+reg  [2:0] csr_dmw0_vseg;
+wire [31:0] csr_dmw0_data;
+
+reg    csr_dmw1_plv0;
+reg    csr_dmw1_plv3;
+reg  [1:0] csr_dmw1_mat;
+reg  [2:0] csr_dmw1_pseg;
+reg  [2:0] csr_dmw1_vseg;
+wire [31:0] csr_dmw1_data;
+
+// TLBIDX
 always @(posedge clk) begin
     if (reset) begin
         csr_tlbidx_ne <= 1'b0;
@@ -98,9 +140,8 @@ always @(posedge clk) begin
  end
 assign csr_tlbidx_data = {csr_tlbidx_ne, 1'b0, csr_tlbidx_ps, 8'b0, csr_tlbidx_index};
 
- // TLBEHI
-reg  [18:0]  csr_tlbehi_vppn;
-wire [31:0]  csr_tlbehi_data;
+
+// TLBEHI
 assign csr_tlbehi_data = {csr_tlbehi_vppn, 13'b0};
 
 always @(posedge clk) begin
@@ -117,15 +158,6 @@ always @(posedge clk) begin
  end
 
 // TLBELO0
-reg  [23:0]  csr_tlbelo0_ppn;
-reg  [ 1:0]  csr_tlbelo0_plv;
-reg  [ 1:0]  csr_tlbelo0_mat;
-reg          csr_tlbelo0_g;
-reg          csr_tlbelo0_d;
-reg          csr_tlbelo0_v;
-wire [31:0]  csr_tlbelo0_data;
-assign csr_tlbelo0_data = {csr_tlbelo0_ppn, 1'b0, csr_tlbelo0_g, csr_tlbelo0_mat, csr_tlbelo0_plv, csr_tlbelo0_d, csr_tlbelo0_v};
-
 always @(posedge clk) begin
     if(reset) begin
         csr_tlbelo0_ppn <= 24'b0;
@@ -158,17 +190,10 @@ always @(posedge clk) begin
         csr_tlbelo0_v   <= tlbelo0_wdata[`CSR_TLBELO_V];
     end
  end 
+assign csr_tlbelo0_data = {csr_tlbelo0_ppn, 1'b0, csr_tlbelo0_g, csr_tlbelo0_mat, csr_tlbelo0_plv, csr_tlbelo0_d, csr_tlbelo0_v};
+
 
 // TLBELO1
-reg  [23:0]  csr_tlbelo1_ppn;
-reg  [ 1:0]  csr_tlbelo1_plv;   
-reg  [ 1:0]  csr_tlbelo1_mat;
-reg          csr_tlbelo1_g;
-reg          csr_tlbelo1_d;
-reg          csr_tlbelo1_v;
-wire [31:0]  csr_tlbelo1_data;
-assign csr_tlbelo1_data = {csr_tlbelo1_ppn, 1'b0, csr_tlbelo1_g, csr_tlbelo1_mat, csr_tlbelo1_plv, csr_tlbelo1_d, csr_tlbelo1_v};
-
 always @(posedge clk) begin
     if(reset) begin
         csr_tlbelo1_ppn <= 24'b0;
@@ -201,13 +226,10 @@ always @(posedge clk) begin
         csr_tlbelo1_v   <= tlbelo1_wdata[`CSR_TLBELO_V];
     end
  end
+assign csr_tlbelo1_data = {csr_tlbelo1_ppn, 1'b0, csr_tlbelo1_g, csr_tlbelo1_mat, csr_tlbelo1_plv, csr_tlbelo1_d, csr_tlbelo1_v};
+
 
 // ASID
-reg  [9:0]   csr_asid_asid;
-reg  [7:0]   csr_asid_asidbits;
-wire [31:0]  csr_asid_data;
-assign csr_asid_data = {8'b0, csr_asid_asidbits, 6'b0, csr_asid_asid};
-
 always @(posedge clk) begin
     if (reset) begin
         csr_asid_asid <= 10'b0;
@@ -220,12 +242,9 @@ always @(posedge clk) begin
                           | ~csr_wmask[`CSR_ASID_ASIDBITS]&csr_asid_asidbits;
     end
  end
+assign csr_asid_data = {8'b0, csr_asid_asidbits, 6'b0, csr_asid_asid};
 
 // TLBRENTRY
-reg  [25:0]  csr_tlbrentry_pa;
-wire [31:0]  csr_tlbrentry_data;
-assign csr_tlbrentry_data = {csr_tlbrentry_pa, 6'b0};
-
 always @(posedge clk) begin
     if (reset) begin
         csr_tlbrentry_pa <= 26'b0;
@@ -235,16 +254,9 @@ always @(posedge clk) begin
                          | ~csr_wmask[`CSR_TLBRENTRY_PA]&csr_tlbrentry_pa;
     end
  end
+assign csr_tlbrentry_data = {csr_tlbrentry_pa, 6'b0};
 
 // DMW0
-reg    csr_dmw0_plv0;
-reg    csr_dmw0_plv3;
-reg  [1:0] csr_dmw0_mat;
-reg  [2:0] csr_dmw0_pseg;
-reg  [2:0] csr_dmw0_vseg;
-wire [31:0] csr_dmw0_data;
-assign csr_dmw0_data = {csr_dmw0_vseg, 1'b0, csr_dmw0_pseg, 19'b0, csr_dmw0_mat, csr_dmw0_plv3, 2'b0, csr_dmw0_plv0};
-
 always @(posedge clk) begin
     if (reset) begin
         csr_dmw0_plv0 <= 1'b0;
@@ -266,16 +278,10 @@ always @(posedge clk) begin
                       | ~csr_wmask[`CSR_DMW_VSEG]&csr_dmw0_vseg;
     end
  end
+assign csr_dmw0_data = {csr_dmw0_vseg, 1'b0, csr_dmw0_pseg, 19'b0, csr_dmw0_mat, csr_dmw0_plv3, 2'b0, csr_dmw0_plv0};
+
 
  // DMW1
-reg    csr_dmw1_plv0;
-reg    csr_dmw1_plv3;
-reg  [1:0] csr_dmw1_mat;
-reg  [2:0] csr_dmw1_pseg;
-reg  [2:0] csr_dmw1_vseg;
-wire [31:0] csr_dmw1_data;
-assign csr_dmw1_data = {csr_dmw1_vseg, 1'b0, csr_dmw1_pseg, 19'b0, csr_dmw1_mat, csr_dmw1_plv3, 2'b0, csr_dmw1_plv0};
-
 always @(posedge clk) begin
     if (reset) begin
         csr_dmw1_plv0 <= 1'b0;
@@ -297,6 +303,7 @@ always @(posedge clk) begin
                       | ~csr_wmask[`CSR_DMW_VSEG]&csr_dmw1_vseg;
     end
  end
+assign csr_dmw1_data = {csr_dmw1_vseg, 1'b0, csr_dmw1_pseg, 19'b0, csr_dmw1_mat, csr_dmw1_plv3, 2'b0, csr_dmw1_plv0};
 
 
 assign hw_int_in = 8'b0;
@@ -338,8 +345,27 @@ always @(posedge clk) begin
                 | ~csr_wmask[`CSR_CRMD_PIE]&csr_crmd_ie;
  end
 
-assign csr_crmd_da   = 1'b1; 
-assign csr_crmd_pg   = 1'b0; 
+always @(posedge clk) begin
+    if (reset)begin
+        csr_crmd_da <= 1'b1;
+        csr_crmd_pg <= 1'b0;
+    end
+    else if (csr_we && csr_num==`CSR_CRMD)begin
+        csr_crmd_da <= csr_wmask[`CSR_CRMD_DA]&csr_wvalue[`CSR_CRMD_DA]
+                | ~csr_wmask[`CSR_CRMD_DA]&csr_crmd_da;
+        csr_crmd_pg <= csr_wmask[`CSR_CRMD_PG]&csr_wvalue[`CSR_CRMD_PG]
+                | ~csr_wmask[`CSR_CRMD_PG]&csr_crmd_pg;
+    end    
+    else if (wb_ex && wb_ecode == `ECODE_TLBR)begin
+        csr_crmd_da <= 1'b1;
+        csr_crmd_pg <= 1'b0;
+    end
+    else if (ertn_flush && csr_estat_ecode == `ECODE_TLBR)begin
+        csr_crmd_da <= 1'b0;
+        csr_crmd_pg <= 1'b1;
+    end
+ end
+
 assign csr_crmd_datf = 2'b00; 
 assign csr_crmd_datm = 2'b00;
 assign csr_crmd_data = {23'b0, csr_crmd_datm, csr_crmd_datf, csr_crmd_pg, 
@@ -497,7 +523,13 @@ assign csr_rvalue =     {32{csr_num == `CSR_CRMD  }} & csr_crmd_data
                       | {32{csr_num == `CSR_TID   }} & csr_tid_tid
                       | {32{csr_num == `CSR_TCFG  }} & csr_tcfg_data
                       | {32{csr_num == `CSR_TVAL  }} & csr_tval
-                      | {32{csr_num == `CSR_TICLR }} & csr_ticlr_data;
+                      | {32{csr_num == `CSR_TICLR }} & csr_ticlr_data
+                      | {32{csr_num == `CSR_TLBIDX}} & csr_tlbidx_data
+                      | {32{csr_num == `CSR_TLBEHI}} & csr_tlbehi_data
+                      | {32{csr_num == `CSR_TLBELO0}} & csr_tlbelo0_data
+                      | {32{csr_num == `CSR_TLBELO1}} & csr_tlbelo1_data
+                      | {32{csr_num == `CSR_ASID  }}  & csr_asid_data
+                      | {32{csr_num == `CSR_TLBRENTRY}} & csr_tlbrentry_data;
 
 endmodule
 

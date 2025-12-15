@@ -27,6 +27,8 @@
 
 `define CSR_CRMD_PLV    1:0
 `define CSR_CRMD_PIE    2
+`define CSR_CRMD_DA     3
+`define CSR_CRMD_PG     4
 
 `define CSR_PRMD_PPLV   1:0
 `define CSR_PRMD_PIE    2
@@ -47,6 +49,11 @@
 
 `define ESUBCODE_ADEF   9'b00
 `define ECODE_INT       6'h00
+`define ECODE_PIL       6'h01   
+`define ECODE_PIS       6'h02
+`define ECODE_PIF       6'h03
+`define ECODE_PME       6'h04
+`define ECODE_PPI       6'h07
 `define ECODE_ADE       6'h08   
 `define ECODE_ALE       6'h09   
 `define ECODE_SYS       6'h0B
