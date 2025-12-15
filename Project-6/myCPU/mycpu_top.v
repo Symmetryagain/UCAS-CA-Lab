@@ -210,6 +210,72 @@ wire            except_ppi_mem;
 wire            mem_we;
 wire            mmu_en;
 
+wire [31:0] csr_dmw0_data;
+wire [31:0] csr_dmw1_data;
+wire [31:0] csr_asid_data;
+wire [31:0] csr_crmd_data;
+
+wire [18:0] s0_vppn;
+wire        s0_va_bit12;
+wire [9:0]  s0_asid;
+wire        s0_found;
+wire [3:0]  s0_index;
+wire [19:0] s0_ppn;
+wire [5:0]  s0_ps;     
+wire [1:0]  s0_plv;
+wire [1:0]  s0_mat;
+wire        s0_d;
+wire        s0_v;
+
+wire [18:0] s1_vppn;
+wire        s1_va_bit12;
+wire [9:0]  s1_asid;
+wire        s1_found;
+wire [3:0]  s1_index;
+wire [19:0] s1_ppn;
+wire [5:0]  s1_ps;     
+wire [1:0]  s1_plv;
+wire [1:0]  s1_mat;
+wire        s1_d;
+wire        s1_v;
+
+wire [3:0]  r_index;
+wire        r_e;
+wire [18:0] r_vppn;
+wire [5:0]  r_ps;
+wire [9:0]  r_asid;
+wire        r_g;
+wire [19:0] r_ppn0;
+wire [1:0]  r_plv0;
+wire [1:0]  r_mat0;
+wire        r_d0;
+wire        r_v0;
+wire [19:0] r_ppn1;
+wire [1:0]  r_plv1;
+wire [1:0]  r_mat1;
+wire        r_d1;
+wire        r_v1;
+
+wire        invtlb_valid;
+wire [4:0]  invtlb_op;
+wire        tlb_we;
+wire [3:0]  w_index;
+wire        w_e;
+wire [18:0] w_vppn;
+wire [5:0]  w_ps;
+wire [9:0]  w_asid;
+wire        w_g;
+wire [19:0] w_ppn0;
+wire [1:0]  w_plv0;
+wire [1:0]  w_mat0;
+wire        w_d0;
+wire        w_v0;
+wire [19:0] w_ppn1;
+wire [1:0]  w_plv1;
+wire [1:0]  w_mat1;
+wire        w_d1;
+wire        w_v1;
+
 // AXI bridge instance
 bridge u_bridge (
     .aclk(aclk),
@@ -481,68 +547,68 @@ assign inst_sram_wr    = | inst_sram_wstrb;
 assign inst_sram_size  = 2'b10;
 assign data_sram_wr    = | data_sram_wstrb;
 
-wire [31:0] csr_dmw0_data;
-wire [31:0] csr_dmw1_data;
-wire [31:0] csr_asid_data;
-wire [31:0] csr_crmd_data;
+// inst mmu instance
+mmu u_inst_mmu(
+    .mem_we         (1'b0),
+    .mmu_en         (1'b1),
+    .vaddr          (pc_next),
+    .paddr          (pc_trans),
+    .s_vppn         (s0_vppn),
+    .s_va_bit12     (s0_va_bit12),
+    .s_asid         (s0_asid),
+    .s_found        (s0_found),
+    .s_index        (s0_index),
+    .s_ppn          (s0_ppn),
+    .s_ps           (s0_ps),     
+    .s_plv          (s0_plv),
+    .s_mat          (s0_mat),
+    .s_d            (s0_d),
+    .s_v            (s0_v),
 
-wire [18:0] s0_vppn;
-wire        s0_va_bit12;
-wire [9:0]  s0_asid;
-wire        s0_found;
-wire [3:0]  s0_index;
-wire [19:0] s0_ppn;
-wire [5:0]  s0_ps;     
-wire [1:0]  s0_plv;
-wire [1:0]  s0_mat;
-wire        s0_d;
-wire        s0_v;
+    .csr_asid_data  (csr_asid_data),
+    .csr_crmd_data  (csr_crmd_data),
+    .csr_dmw0_data  (csr_dmw0_data),
+    .csr_dmw1_data  (csr_dmw1_data),
 
-wire [18:0] s1_vppn;
-wire        s1_va_bit12;
-wire [9:0]  s1_asid;
-wire        s1_found;
-wire [3:0]  s1_index;
-wire [19:0] s1_ppn;
-wire [5:0]  s1_ps;     
-wire [1:0]  s1_plv;
-wire [1:0]  s1_mat;
-wire        s1_d;
-wire        s1_v;
+    .except_tlbr    (except_tlbr_if),
+    .except_pif     (except_pif),
+    .except_pil     (),
+    .except_pis     (),
+    .except_pme     (),
+    .except_ppi     (except_ppi_if)
+);
 
-wire [3:0]  r_index;
-wire        r_e;
-wire [18:0] r_vppn;
-wire [5:0]  r_ps;
-wire [9:0]  r_asid;
-wire        r_g;
-wire [19:0] r_ppn0;
-wire [1:0]  r_plv0;
-wire [1:0]  r_mat0;
-wire        r_d0;
-wire        r_v0;
-wire [19:0] r_ppn1;
-wire [1:0]  r_plv1;
-wire [1:0]  r_mat1;
-wire        r_d1;
-wire        r_v1;
+// data mmu instance
+mmu u_data_mmu(
+    .mem_we         (mem_we),
+    .mmu_en         (mmu_en),
+    .vaddr          (data_sram_addr),
+    .paddr          (),
+    .s_vppn         (s1_vppn),
+    .s_va_bit12     (s1_va_bit12),
+    .s_asid         (s1_asid),
+    .s_found        (s1_found),
+    .s_index        (s1_index),
+    .s_ppn          (s1_ppn),
+    .s_ps           (s1_ps),     
+    .s_plv          (s1_plv),
+    .s_mat          (s1_mat),
+    .s_d            (s1_d),
+    .s_v            (s1_v),
 
-wire [3:0]  w_index;
-wire        w_e;
-wire [18:0] w_vppn;
-wire [5:0]  w_ps;
-wire [9:0]  w_asid;
-wire        w_g;
-wire [19:0] w_ppn0;
-wire [1:0]  w_plv0;
-wire [1:0]  w_mat0;
-wire        w_d0;
-wire        w_v0;
-wire [19:0] w_ppn1;
-wire [1:0]  w_plv1;
-wire [1:0]  w_mat1;
-wire        w_d1;
-wire        w_v1;
+    .csr_asid_data  (csr_asid_data),
+    .csr_crmd_data  (csr_crmd_data),
+    .csr_dmw0_data  (csr_dmw0_data),
+    .csr_dmw1_data  (csr_dmw1_data),
+
+    .except_tlbr    (except_tlbr_mem),
+    .except_pif     (),
+    .except_pil     (except_pil),
+    .except_pis     (except_pis),
+    .except_pme     (except_pme),
+    .except_ppi     (except_ppi_mem)
+);
+
 
 // tlb instance
 tlb u_tlb(
@@ -571,25 +637,25 @@ tlb u_tlb(
     .s1_d           (s1_d),
     .s1_v           (s1_v),
 
-    .invtlb_valid   (),    
-    .invtlb_op      (),
-    .we             (),
-    .w_index        (),
-    .w_e            (),
-    .w_vppn         (),
-    .w_ps           (),
-    .w_asid         (),
-    .w_g            (),
-    .w_ppn0         (),
-    .w_plv0         (),
-    .w_mat0         (),
-    .w_d0           (),
-    .w_v0           (),
-    .w_ppn1         (),
-    .w_plv1         (),
-    .w_mat1         (),
-    .w_d1           (), 
-    .w_v1           (),
+    .invtlb_valid   (invtlb_valid),    
+    .invtlb_op      (invtlb_op),
+    .we             (tlb_we),
+    .w_index        (w_index),
+    .w_e            (w_e),
+    .w_vppn         (w_vppn),
+    .w_ps           (w_ps),
+    .w_asid         (w_asid),
+    .w_g            (w_g),
+    .w_ppn0         (w_ppn0),
+    .w_plv0         (w_plv0),
+    .w_mat0         (w_mat0),
+    .w_d0           (w_d0),
+    .w_v0           (w_v0),
+    .w_ppn1         (w_ppn1),
+    .w_plv1         (w_plv1),
+    .w_mat1         (w_mat1),
+    .w_d1           (w_d1), 
+    .w_v1           (w_v1),
     .r_index        (r_index),
     .r_e            (r_e),
     .r_vppn         (r_vppn),
