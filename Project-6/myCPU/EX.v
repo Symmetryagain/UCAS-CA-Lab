@@ -222,7 +222,7 @@ assign udiv_src_valid = wait_src_ready;
 assign div_res_ready = wait_res_valid;
 assign udiv_res_ready = wait_res_valid;
 
-assign mmu_en = valid & (res_from_mem | mem_we);
+assign mmu_en = valid & (res_from_mem | mem_we) & ~(|ID_except_reg);
 
 assign invtlb_valid = valid & inst_invtlb;
 assign invtlb_op = rf_waddr;

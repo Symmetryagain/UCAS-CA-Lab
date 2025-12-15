@@ -475,8 +475,7 @@ assign wb_ex_addr_err = wb_ecode == `ECODE_ADE
                      || page_err;
 always @(posedge clk) begin
     if (wb_ex && wb_ex_addr_err)
-        csr_badv_vaddr <= (wb_ecode==`ECODE_ADE &&
-                           wb_esubcode==`ESUBCODE_ADEF) ? wb_pc : wb_vaddr;
+        csr_badv_vaddr <= wb_vaddr;
  end
 
 // TID

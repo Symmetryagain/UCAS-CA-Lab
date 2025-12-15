@@ -138,8 +138,11 @@ wire            except_ale;
 wire            except_brk;
 wire            except_ine;
 wire            except_int;
+wire            err_from_if;
 wire [31:0]     rf_wdata;
+wire [31:0]     err_addr;
 wire            inst_ertn;
+
 reg             at_state;
 always @(posedge clk) begin
         if (rst) begin
@@ -167,17 +170,20 @@ assign {
         except_adef, except_tlbr_if, except_pif, except_ppi_if,
         except_sys, except_brk, except_ine, except_int, 
         except_ale, except_tlbr_mem, except_pil, except_pis, except_pme, except_ppi_mem,
-        wb_vaddr
+        err_addr
 } = MEM_except_reg;
 
 assign rf_wen           = valid & gr_we & ~wb_ex;
 assign rf_wdata_final   = csr_re ? csr_rvalue : rf_wdata;
 assign inst_retire      = {pc, {4{rf_wen}}, rf_waddr, rf_wdata_final};
 
+assign err_from_if      = except_adef | except_tlbr_if | except_pif | except_ppi_if;
+assign wb_vaddr         = err_from_if? pc       :
+                                       err_addr ;
 assign wb_ex            = valid & (
-                                except_adef | except_tlbr_if  | except_pif | except_pme | except_ppi_if |
-                                except_sys  | except_brk      | except_ine | except_int | 
-                                except_ale  | except_tlbr_mem | except_pil | except_pis | except_ppi_mem    
+                                except_adef | except_tlbr_if  | except_pif | except_ppi_if |
+                                except_sys  | except_brk      | except_ine | except_int    | 
+                                except_ale  | except_tlbr_mem | except_pil | except_pis    | except_pme | except_ppi_mem    
                         );
 assign ertn_flush       = valid & inst_ertn;
 assign except_tlbr      = except_tlbr_if | except_tlbr_mem;
@@ -198,8 +204,8 @@ assign wb_ecode         = except_int?     `ECODE_INT:
                           except_pis?     `ECODE_PIS:
                           except_ppi_mem? `ECODE_PPI:
                           6'b0;
-assign wb_esubcode      = //inst_syscall ? `ESUBCODE_NONE : 
-                                9'd0;
+assign wb_esubcode      = except_adef?    `ESUBCODE_ADEF:
+                                          `ESUBCODE_NONE;
 
 reg  [$clog2(TLBNUM)-1:0]       tlb_fill_idx;
 always @(posedge clk) begin

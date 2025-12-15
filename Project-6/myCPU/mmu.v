@@ -61,10 +61,11 @@ assign paddr =  direct_translate? vaddr :
                 tlb_paddr;
                 
 assign except_tlbr = mmu_en & tlb_map & ~s_found;
-assign except_pif  = mmu_en & tlb_map & ~s_v;
-assign except_pis  = mmu_en & tlb_map & ~s_v &  mem_we;
-assign except_pil  = mmu_en & tlb_map & ~s_v & ~mem_we;
-assign except_pme  = mmu_en & tlb_map & ~s_d &  mem_we;
-assign except_ppi  = mmu_en & tlb_map & s_found & (csr_crmd_plv[1:0] > s_plv);
+assign except_pif  = mmu_en & tlb_map &  s_found & ~s_v;
+assign except_pis  = mmu_en & tlb_map &  s_found & ~s_v                                       &  mem_we;
+assign except_pil  = mmu_en & tlb_map &  s_found & ~s_v                                       & ~mem_we;
+assign except_ppi  = mmu_en & tlb_map &  s_found &  s_v & (csr_crmd_plv[1:0]  > s_plv);
+assign except_pme  = mmu_en & tlb_map &  s_found &  s_v & (csr_crmd_plv[1:0] <= s_plv) & ~s_d &  mem_we;
+
 
 endmodule
