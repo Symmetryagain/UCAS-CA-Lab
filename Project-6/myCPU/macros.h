@@ -29,6 +29,8 @@
 `define CSR_CRMD_PIE    2
 `define CSR_CRMD_DA     3
 `define CSR_CRMD_PG     4
+`define CSR_CRMD_DATF   6:5
+`define CSR_CRMD_DATM   8:7
 
 `define CSR_PRMD_PPLV   1:0
 `define CSR_PRMD_PIE    2

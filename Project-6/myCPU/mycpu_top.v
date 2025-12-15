@@ -138,11 +138,13 @@ wire            csr_we;
 wire [31:0]     csr_wmask;
 wire [31:0]     csr_wvalue;
 wire            ertn_flush;
+wire            except_tlbr;
 wire            wb_ex;  
 wire [31:0]     wb_pc;
 wire [ 5:0]     wb_ecode;
 wire [ 8:0]     wb_esubcode;
 wire [31:0]     csr_eentry_data;
+wire [31:0]     csr_tlbrentry_data;
 wire [31:0]     csr_era_pc;
 wire            flush;
 wire [31:0]     flush_target;
@@ -481,6 +483,7 @@ WB u_WB (
     .csr_wmask      (csr_wmask),
     .csr_wvalue     (csr_wvalue),
     .ertn_flush     (ertn_flush),
+    .except_tlbr    (except_tlbr),
     .wb_pc          (wb_pc),
     .wb_ex          (wb_ex),
     .wb_ecode       (wb_ecode),
@@ -572,6 +575,7 @@ csr u_csr(
     .wb_ecode   (wb_ecode),
     .wb_esubcode(wb_esubcode),
     .csr_eentry_data    (csr_eentry_data),
+    .csr_tlbrentry_data (csr_tlbrentry_data),
     .csr_era_pc (csr_era_pc),
 
     .csr_dmw0_data      (csr_dmw0_data),
@@ -594,7 +598,9 @@ csr u_csr(
 );
 
 assign flush = ertn_flush | wb_ex | tlb_flush;
-assign flush_target = ertn_flush ? csr_era_pc : wb_ex ? csr_eentry_data : tlb_flush_target;
+assign flush_target = ertn_flush? csr_era_pc : 
+                      wb_ex?      {32{except_tlbr}} & csr_tlbrentry_data | {32{~except_tlbr}} & csr_eentry_data : 
+                                  tlb_flush_target ;
 
 // tie-off instruction sram write controls (read-only from CPU)
 assign inst_sram_wstrb = 4'b0;

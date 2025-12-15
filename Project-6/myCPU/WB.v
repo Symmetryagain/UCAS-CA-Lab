@@ -24,6 +24,7 @@ module WB #(
         output  wire [31:0]     csr_wvalue,
         output  wire            wb_ex,
         output  wire            ertn_flush,
+        output  wire            except_tlbr,
         output  wire [31:0]     wb_pc,
         output  wire [ 5:0]     wb_ecode,
         output  wire [ 8:0]     wb_esubcode,
@@ -179,6 +180,7 @@ assign wb_ex            = valid & (
                                 except_ale  | except_tlbr_mem | except_pil | except_pis | except_ppi_mem    
                         );
 assign ertn_flush       = valid & inst_ertn;
+assign except_tlbr      = except_tlbr_if | except_tlbr_mem;
 assign wb_pc            = pc;
 
 assign wb_ecode         = except_int?     `ECODE_INT:

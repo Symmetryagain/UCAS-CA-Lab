@@ -18,6 +18,7 @@ module csr(
         input   wire  [ 5:0]    wb_ecode,  
         input   wire  [ 8:0]    wb_esubcode,
         output  wire  [31:0]    csr_eentry_data,
+        output  wire  [31:0]    csr_tlbrentry_data,
         output  reg   [31:0]    csr_era_pc,
 
         output  wire  [31:0]    csr_dmw0_data,
@@ -43,8 +44,8 @@ reg  [ 1: 0] csr_crmd_plv;
 reg          csr_crmd_ie;       
 reg          csr_crmd_da;       
 reg          csr_crmd_pg;
-wire [ 6: 5] csr_crmd_datf;
-wire [ 8: 7] csr_crmd_datm;
+reg  [ 6: 5] csr_crmd_datf;
+reg  [ 8: 7] csr_crmd_datm;
 
 wire [31: 0] csr_prmd_data;
 reg  [ 1: 0] csr_prmd_pplv;     
@@ -104,7 +105,6 @@ reg  [9:0]   csr_asid_asid;
 reg  [7:0]   csr_asid_asidbits;
 
 reg  [25:0]  csr_tlbrentry_pa;
-wire [31:0]  csr_tlbrentry_data;
 
 reg    csr_dmw0_plv0;
 reg    csr_dmw0_plv3;
@@ -339,28 +339,39 @@ always @(posedge clk) begin
  end
 
 always @(posedge clk) begin
-    if (reset)begin
+    if (reset) begin
         csr_crmd_da <= 1'b1;
         csr_crmd_pg <= 1'b0;
     end
-    else if (csr_we && csr_num==`CSR_CRMD)begin
+    else if (csr_we && csr_num == `CSR_CRMD) begin
         csr_crmd_da <= csr_wmask[`CSR_CRMD_DA]&csr_wvalue[`CSR_CRMD_DA]
                 | ~csr_wmask[`CSR_CRMD_DA]&csr_crmd_da;
         csr_crmd_pg <= csr_wmask[`CSR_CRMD_PG]&csr_wvalue[`CSR_CRMD_PG]
                 | ~csr_wmask[`CSR_CRMD_PG]&csr_crmd_pg;
     end    
-    else if (wb_ex && wb_ecode == `ECODE_TLBR)begin
+    else if (wb_ex && wb_ecode == `ECODE_TLBR) begin
         csr_crmd_da <= 1'b1;
         csr_crmd_pg <= 1'b0;
     end
-    else if (ertn_flush && csr_estat_ecode == `ECODE_TLBR)begin
+    else if (ertn_flush && csr_estat_ecode == `ECODE_TLBR) begin
         csr_crmd_da <= 1'b0;
         csr_crmd_pg <= 1'b1;
     end
- end
+end
 
-assign csr_crmd_datf = 2'b00; 
-assign csr_crmd_datm = 2'b00;
+always @(posedge clk) begin
+    if (reset) begin
+        csr_crmd_datf <= 2'b00;
+        csr_crmd_datm <= 2'b00;
+    end
+    else if (csr_we && csr_num == `CSR_CRMD) begin
+        csr_crmd_datf <= csr_wmask[`CSR_CRMD_DATF]&csr_wvalue[`CSR_CRMD_DATF]
+                    | ~csr_wmask[`CSR_CRMD_DATF]&csr_crmd_datf;
+        csr_crmd_datm <= csr_wmask[`CSR_CRMD_DATM]&csr_wvalue[`CSR_CRMD_DATM]
+                    | ~csr_wmask[`CSR_CRMD_DATM]&csr_crmd_datm;
+    end
+end
+
 assign csr_crmd_data = {23'b0, csr_crmd_datm, csr_crmd_datf, csr_crmd_pg, 
                             csr_crmd_da, csr_crmd_ie, csr_crmd_plv};
 
