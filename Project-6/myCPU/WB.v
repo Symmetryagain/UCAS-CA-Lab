@@ -6,7 +6,7 @@ module WB(
         // MEM -> WB
         input   wire            MEM_to_WB,
         input   wire [102:0]    MEM_to_WB_zip,
-        input   wire [118:0]    MEM_except_zip,
+        input   wire [122:0]    MEM_except_zip,
         // WB -> MEM
         output  wire            WB_allowin,
         // WB -> top
@@ -51,10 +51,10 @@ always @(posedge clk) begin
         end
 end
 
-reg  [118:0]    MEM_except_reg;
+reg  [122:0]    MEM_except_reg;
 always @(posedge clk) begin
         if (rst) begin
-                MEM_except_reg <= 119'b0;
+                MEM_except_reg <= 123'b0;
         end
         else if (MEM_to_WB) begin
                 MEM_except_reg <= MEM_except_zip;
@@ -68,12 +68,16 @@ wire            MEM_to_WB_valid;
 wire [31:0]     pc;
 wire [31:0]     IR;
 wire            gr_we;
+wire            except_tlbr;
+wire            except_pif;
+wire            except_pme;
+wire            except_ppi;
+wire            except_adef;
 wire            except_sys;
 wire            except_ale;
 wire            except_brk;
 wire            except_ine;
 wire            except_int;
-wire            except_adef;
 wire [31:0]     rf_wdata;
 wire            inst_ertn;
 reg             at_state;
@@ -97,7 +101,9 @@ assign {
 
 assign {
         csr_re, csr_we, csr_wmask, csr_wvalue, csr_num, 
-        inst_ertn, except_sys, except_adef, except_brk, except_ine, except_int, except_ale,
+        inst_ertn, 
+        except_adef, except_tlbr, except_pif, except_pme, except_ppi,
+        except_sys, except_brk, except_ine, except_int, except_ale,
         wb_vaddr
 } = MEM_except_reg;
 
@@ -109,8 +115,9 @@ assign wb_ex = valid & (except_sys | except_adef | except_brk | except_ine | exc
 assign ertn_flush = valid & inst_ertn;
 assign wb_pc = pc;
 
-assign wb_ecode    =    except_sys?  `ECODE_SYS:
-                        except_adef? `ECODE_ADE:
+assign wb_ecode    =    except_adef? `ECODE_ADE:
+                        except_tlbr? `ECODE_TLBR:
+                        except_sys?  `ECODE_SYS:
                         except_ale?  `ECODE_ALE: 
                         except_brk?  `ECODE_BRK:
                         except_ine?  `ECODE_INE:

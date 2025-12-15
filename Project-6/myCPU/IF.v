@@ -5,7 +5,8 @@ module IF (
         input   wire            rst,
         // IF -> top
         output  wire            inst_sram_en,
-        output  reg  [31:0]     pc,
+        output  wire [31:0]     pc_next,
+        output  reg  [31:0]     pc_paddr,
         // top -> IF
         /// inst_sram
         input   wire            inst_sram_addr_ok,
@@ -14,16 +15,22 @@ module IF (
         /// flush
         input   wire            flush,
         input   wire [31:0]     flush_target,
+        /// mmu
+        input   wire [31:0]     pc_trans,
+        input   wire            except_tlbr,
+        input   wire            except_pif,
+        input   wire            except_pme,
+        input   wire            except_ppi,
         // IF -> ID
         output  wire            IF_to_ID,
-        output  wire [66:0]     IF_to_ID_zip,
+        output  wire [65:0]     IF_to_ID_zip,
+        output  wire [ 4:0]     IF_except_zip,
         // ID -> IF
         input   wire            ID_allowin,
         input   wire            ID_flush,
         input   wire [31:0]     ID_flush_target
 );
 
-wire [31:0]     pc_next;
 wire            except_adef;
 wire            g_flush;
 wire            nxt_is_wait_addr_ok;
@@ -42,6 +49,7 @@ wire            predict;
 // wire [15:0]     i16;
 // wire [25:0]     i26;
 
+reg  [31:0]     pc;
 reg  [31:0]     IR;
 reg             lock_addr;
 reg             lock_data;
@@ -50,19 +58,21 @@ reg             wait_data_ok;
 reg             readygo;
 reg  [31:0]     last_target;
 
-assign IF_to_ID = readygo & ID_allowin;
-assign IF_to_ID_zip = {~g_flush, predict, IR, pc, except_adef};
-assign inst_sram_en = wait_addr_ok | lock_addr;
-assign pc_next = flush ? flush_target : 
-                 ID_flush ? ID_flush_target : 
-                 lock_data ? last_target : pc + 4;
-assign except_adef = (|pc[1:0]);
-assign g_flush = flush | ID_flush;
+assign IF_to_ID         = readygo & ID_allowin;
+// assign IF_to_ID_zip     = {~g_flush, predict, IR, pc, except_adef};
+assign IF_to_ID_zip     = {~g_flush, pc, IR, predict};
+assign IF_except_zip    = {except_adef, except_tlbr, except_pif, except_pme, except_ppi};
+assign inst_sram_en     = wait_addr_ok | lock_addr;
+assign pc_next          = flush ? flush_target : 
+                                ID_flush ? ID_flush_target : 
+                                lock_data ? last_target : pc + 4;
+assign except_adef      = (|pc[1:0]);
+assign g_flush          = flush | ID_flush;
 assign predict          = 1'b0;
-assign nxt_is_wait_addr_ok = wait_data_ok & g_flush & inst_sram_data_ok
-                           | readygo & g_flush 
-                           | readygo & ID_allowin 
-                           | lock_data & inst_sram_data_ok;
+assign nxt_is_wait_addr_ok      = wait_data_ok & g_flush & inst_sram_data_ok
+                                | readygo & g_flush 
+                                | readygo & ID_allowin 
+                                | lock_data & inst_sram_data_ok;
 // assign op_31_26         = inst[31:26];
 // assign inst_jirl        = op_31_26_d[6'h13];
 // assign inst_b           = op_31_26_d[6'h14];

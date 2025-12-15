@@ -120,7 +120,7 @@ wire            MEM_allowin;
 wire            WB_allowin;
 
 // internal pipeline zipes
-wire [66:0]     IF_to_ID_zip;
+wire [ 65:0]    IF_to_ID_zip;
 wire [198:0]    ID_to_EX_zip;
 wire [145:0]    EX_to_MEM_zip;
 wire [102:0]    MEM_to_WB_zip;
@@ -130,13 +130,13 @@ wire            ID_flush;
 wire [31:0]     ID_pc_real;
 
 // regfile <-> ID / WB
-wire [4:0]      rf_raddr1;
-wire [4:0]      rf_raddr2;
+wire [ 4:0]     rf_raddr1;
+wire [ 4:0]     rf_raddr2;
 wire [31:0]     rf_rdata1;
 wire [31:0]     rf_rdata2;
 
 wire            wb_rf_wen;
-wire [4:0]      wb_rf_waddr;
+wire [ 4:0]     wb_rf_waddr;
 wire [31:0]     wb_rf_wdata;
 
 // WB inst_retire
@@ -159,20 +159,21 @@ wire [31:0]     csr_wmask;
 wire [31:0]     csr_wvalue;
 wire            ertn_flush;
 wire            wb_ex;  
-wire  [31:0]    wb_pc;
-wire  [ 5:0]    wb_ecode;
-wire  [ 8:0]    wb_esubcode;
-wire  [31:0]    csr_eentry_data;
-wire  [31:0]    csr_era_pc;
+wire [31:0]     wb_pc;
+wire [ 5:0]     wb_ecode;
+wire [ 8:0]     wb_esubcode;
+wire [31:0]     csr_eentry_data;
+wire [31:0]     csr_era_pc;
 wire            flush;
-wire  [31:0]    flush_target;
+wire [31:0]     flush_target;
 wire            has_int;
 
-wire  [ 85:0]   ID_except_zip;
-wire  [ 86:0]   EX_except_zip;
-wire  [118:0]   MEM_except_zip;
+wire [  4:0]    IF_except_zip;
+wire [ 89:0]    ID_except_zip;
+wire [ 90:0]    EX_except_zip;
+wire [122:0]    MEM_except_zip;
 
-wire  [31:0]    wb_vaddr;
+wire [31:0]     wb_vaddr;
 
 wire            IF_to_ID;
 wire            ID_to_EX;
@@ -182,6 +183,13 @@ wire            EX_is_csr;
 wire            EX_is_load;
 wire            MEM_is_csr;
 wire            MEM_is_load;
+
+wire [31:0]     pc_next;
+wire [31:0]     pc_trans;
+wire            except_tlbrfl;
+wire            except_pinv;
+wire            except_pmod;
+wire            except_plvl;
 
 // AXI bridge instance
 bridge u_bridge (
@@ -257,15 +265,22 @@ IF u_IF (
     .ID_flush       (ID_flush),
     .inst           (inst_sram_rdata),
     .ID_flush_target(ID_pc_real),
-    .pc             (inst_sram_addr),
+    .pc_paddr       (inst_sram_addr),
     .IF_to_ID_zip   (IF_to_ID_zip),
+    .IF_except_zip  (IF_except_zip),
     .ID_allowin     (ID_allowin),
     .inst_sram_addr_ok     (inst_sram_addr_ok),
     .inst_sram_data_ok     (inst_sram_data_ok),
     .inst_sram_en   (inst_sram_req),
     .flush          (flush),
     .flush_target   (flush_target),
-    .IF_to_ID       (IF_to_ID)
+    .IF_to_ID       (IF_to_ID),
+    .pc_next        (pc_next),
+    .pc_trans       (pc_trans),
+    .except_tlbrfl  (except_tlbrfl),
+    .except_pinv    (except_pinv),
+    .except_pmod    (except_pmod),
+    .except_plvl    (except_plvl)
 );
 
 // ID instance
@@ -273,6 +288,7 @@ ID u_ID (
     .clk            (clk),
     .rst            (reset),
     .IF_to_ID_zip   (IF_to_ID_zip),
+    .IF_except_zip  (IF_except_zip),
     .front_from_EX_valid (EX_front_valid),
     .front_from_EX_addr  (EX_front_addr),
     .front_from_EX_data  (EX_front_data),

@@ -6,11 +6,11 @@ module MEM(
         // EX -> MEM
         input   wire            EX_to_MEM,
         input   wire [145:0]    EX_to_MEM_zip,
-        input   wire [ 86:0]    EX_except_zip,
+        input   wire [ 90:0]    EX_except_zip,
         // MEM -> WB
         output  wire            MEM_to_WB,
         output  wire [102:0]    MEM_to_WB_zip,
-        output  wire [118:0]    MEM_except_zip,
+        output  wire [122:0]    MEM_except_zip,
         // WB -> MEM
         input   wire            WB_allowin,
         // MEM -> top
@@ -46,10 +46,10 @@ always @(posedge clk) begin
         end
 end
 
-reg  [ 86:0]    EX_except_reg;
+reg  [ 90:0]    EX_except_reg;
 always @(posedge clk) begin
         if (rst) begin
-                EX_except_reg <= 87'b0;
+                EX_except_reg <= 91'b0;
         end
         else if (EX_to_MEM) begin
                 EX_except_reg <= EX_except_zip;

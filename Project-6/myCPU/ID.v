@@ -9,7 +9,8 @@ module ID(
         output  wire [ 31:0]    ID_flush_target,
         // IF -> ID
         input   wire            IF_to_ID,
-        input   wire [ 66:0]    IF_to_ID_zip,
+        input   wire [ 65:0]    IF_to_ID_zip,
+        input   wire [  4:0]    IF_except_zip,
         // ID -> top
         output  wire [  4:0]    rf_raddr1,
         output  wire [  4:0]    rf_raddr2,
@@ -21,7 +22,7 @@ module ID(
         // ID -> EX
         output  wire            ID_to_EX,
         output  wire [198:0]    ID_to_EX_zip,
-        output  wire [ 85:0]    ID_except_zip,
+        output  wire [ 89:0]    ID_except_zip,
         // EX -> ID
         input   wire            EX_allowin,
         input   wire            front_from_EX_valid,
@@ -73,10 +74,10 @@ assign load_block_MEM = MEM_is_load & |front_from_MEM_addr & ~mem_done
                      & (front_from_MEM_addr == rf_raddr1 || front_from_MEM_addr == rf_raddr2);
 assign readygo = ~load_block_EX & ~load_block_MEM & ~EX_is_csr & ~MEM_is_csr & at_state;
 
-reg  [66:0]     IF_to_ID_reg;
+reg  [65:0]     IF_to_ID_reg;
 always @(posedge clk) begin
         if (rst) begin
-                IF_to_ID_reg <= 67'b0;
+                IF_to_ID_reg <= 66'b0;
         end
         else if (IF_to_ID) begin
                 IF_to_ID_reg <= IF_to_ID_zip;
@@ -86,13 +87,25 @@ always @(posedge clk) begin
         end
 end
 
+reg  [ 4:0]     IF_except_reg;
+always @(posedge clk) begin
+        if (rst) begin
+                IF_except_reg <= 5'b0;
+        end
+        else if (IF_to_ID) begin
+                IF_except_reg <= IF_except_zip;
+        end
+        else begin
+                IF_except_reg <= IF_except_reg;
+        end
+end
+
 wire            IF_to_ID_valid;
 wire            predict;
 wire [31:0]     pc;
 wire [31:0]     inst;
-wire            except_adef;
 assign {
-        IF_to_ID_valid, predict, inst, pc, except_adef
+        IF_to_ID_valid, predict, inst, pc
 } = IF_to_ID_reg;
 
 wire [11:0]     alu_op;
@@ -427,7 +440,7 @@ assign ID_to_EX_zip = {
 
 assign ID_except_zip = {
         csr_re, csr_we, csr_wmask, csr_wvalue, csr_num, 
-        inst_ertn, except_sys, except_adef, except_brk, except_ine, except_int
+        inst_ertn, IF_except_reg, except_sys, except_brk, except_ine, except_int
 };
 
 assign ID_flush_target = br_target;

@@ -11,11 +11,11 @@ module EX(
         // ID -> EX
         input   wire            ID_to_EX,
         input   wire [198:0]    ID_to_EX_zip,
-        input   wire [ 85:0]    ID_except_zip,
+        input   wire [ 89:0]    ID_except_zip,
         // EX -> MEM
         output  wire            EX_to_MEM,
         output  wire [145:0]    EX_to_MEM_zip,
-        output  wire [ 86:0]    EX_except_zip,
+        output  wire [ 90:0]    EX_except_zip,
         // MEM -> EX
         input   wire            MEM_allowin,
         // top -> EX
@@ -41,10 +41,10 @@ always @(posedge clk) begin
         end
 end
 
-reg  [85:0]     ID_except_reg;
+reg  [89:0]     ID_except_reg;
 always @(posedge clk) begin
         if (rst) begin
-                ID_except_reg <= 86'b0;
+                ID_except_reg <= 90'b0;
         end
         else if (ID_to_EX) begin
                 ID_except_reg <= ID_except_zip;
