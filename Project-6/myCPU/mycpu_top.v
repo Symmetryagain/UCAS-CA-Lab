@@ -122,7 +122,7 @@ wire            WB_allowin;
 // internal pipeline zipes
 wire [ 65:0]    IF_to_ID_zip;
 wire [198:0]    ID_to_EX_zip;
-wire [145:0]    EX_to_MEM_zip;
+wire [177:0]    EX_to_MEM_zip;
 wire [102:0]    MEM_to_WB_zip;
 
 // IF <-> ID signals
@@ -168,10 +168,10 @@ wire            flush;
 wire [31:0]     flush_target;
 wire            has_int;
 
-wire [  4:0]    IF_except_zip;
-wire [ 89:0]    ID_except_zip;
-wire [ 90:0]    EX_except_zip;
-wire [122:0]    MEM_except_zip;
+wire [  3:0]    IF_except_zip;
+wire [ 88:0]    ID_except_zip;
+wire [ 94:0]    EX_except_zip;
+wire [126:0]    MEM_except_zip;
 
 wire [31:0]     wb_vaddr;
 
@@ -286,7 +286,6 @@ IF u_IF (
     .pc_trans       (pc_trans),
     .except_tlbr    (except_tlbr_if),
     .except_pif     (except_pif),
-    .except_pme     (except_pme),
     .except_ppi     (except_ppi_if)
 );
 

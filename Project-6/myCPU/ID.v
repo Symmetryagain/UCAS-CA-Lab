@@ -10,7 +10,7 @@ module ID(
         // IF -> ID
         input   wire            IF_to_ID,
         input   wire [ 65:0]    IF_to_ID_zip,
-        input   wire [  4:0]    IF_except_zip,
+        input   wire [  3:0]    IF_except_zip,
         // ID -> top
         output  wire [  4:0]    rf_raddr1,
         output  wire [  4:0]    rf_raddr2,
@@ -22,7 +22,7 @@ module ID(
         // ID -> EX
         output  wire            ID_to_EX,
         output  wire [198:0]    ID_to_EX_zip,
-        output  wire [ 89:0]    ID_except_zip,
+        output  wire [ 88:0]    ID_except_zip,
         // EX -> ID
         input   wire            EX_allowin,
         input   wire            front_from_EX_valid,
@@ -87,10 +87,10 @@ always @(posedge clk) begin
         end
 end
 
-reg  [ 4:0]     IF_except_reg;
+reg  [ 3:0]     IF_except_reg;
 always @(posedge clk) begin
         if (rst) begin
-                IF_except_reg <= 5'b0;
+                IF_except_reg <= 4'b0;
         end
         else if (IF_to_ID) begin
                 IF_except_reg <= IF_except_zip;
@@ -404,25 +404,25 @@ assign  br_target       = (inst_beq | inst_bne | inst_bl | inst_b | inst_blt | i
 
 assign  ID_flush        = ((br_taken ^ predict) | inst_jirl) & ~rst & valid;
 
-assign csr_re       = inst_csrrd | inst_csrwr | inst_csrxchg | inst_rdcntid;
+assign csr_re       = inst_csrrd | inst_csrwr   | inst_csrxchg | inst_rdcntid;
 assign csr_we       = inst_csrwr | inst_csrxchg | inst_tlbsrch | inst_tlbrd;
 assign csr_wmask    = {32{inst_csrxchg}} & rj_value | {32{inst_csrwr}} | {32{inst_tlbsrch}} | {32{inst_tlbrd}};
 assign csr_wvalue   = rkd_value;
 assign csr_num      = inst_rdcntid ? `CSR_TID :
                       inst_tlbsrch ? `CSR_TLBIDX:
-                      
                       inst[23:10];
 
 assign except_sys  = inst_syscall;
 assign except_brk  = inst_break;
-assign except_ine  = ~(inst_add_w | inst_sub_w | inst_slt | inst_sltu | inst_nor | inst_and | inst_or | inst_xor |
-                inst_slli_w | inst_srli_w | inst_srai_w | inst_addi_w | inst_ld_w | inst_st_w | inst_jirl |
-                inst_b | inst_bl | inst_beq | inst_bne | inst_lu12i_w | inst_slti | inst_sltui | inst_andi |
-                inst_ori | inst_xori | inst_sll | inst_srl | inst_sra | inst_pcaddu12i | inst_mul | inst_mulh |
-                inst_mulhu | inst_div | inst_mod | inst_divu | inst_modu | inst_blt | inst_bge | inst_bltu |
-                inst_bgeu | inst_ld_b | inst_ld_h | inst_ld_bu | inst_ld_hu | inst_st_b | inst_st_h |
-                inst_csrrd | inst_csrwr | inst_csrxchg | inst_ertn | inst_syscall | inst_break | inst_rdcntid | inst_rdcntvl | inst_rdcntvh |
-                inst_tlbsrch | inst_tlbrd | inst_tlbwr | inst_tlbfill | inst_invtlb) & valid;
+assign except_ine  = ~( inst_add_w   | inst_sub_w  | inst_slt     | inst_sltu    | inst_nor     | inst_and       | inst_or      | inst_xor     |
+                        inst_slli_w  | inst_srli_w | inst_srai_w  | inst_addi_w  | inst_ld_w    | inst_st_w      | inst_jirl    |
+                        inst_b       | inst_bl     | inst_beq     | inst_bne     | inst_lu12i_w | inst_slti      | inst_sltui   | inst_andi    |
+                        inst_ori     | inst_xori   | inst_sll     | inst_srl     | inst_sra     | inst_pcaddu12i | inst_mul     | inst_mulh    |
+                        inst_mulhu   | inst_div    | inst_mod     | inst_divu    | inst_modu    | inst_blt       | inst_bge     | inst_bltu    |
+                        inst_bgeu    | inst_ld_b   | inst_ld_h    | inst_ld_bu   | inst_ld_hu   | inst_st_b      | inst_st_h    |
+                        inst_csrrd   | inst_csrwr  | inst_csrxchg | inst_ertn    | inst_syscall | inst_break     | inst_rdcntid | inst_rdcntvl | inst_rdcntvh |
+                        inst_tlbsrch | inst_tlbrd  | inst_tlbwr   | inst_tlbfill | inst_invtlb
+                        ) & valid;
 assign except_int  = has_int;
 
 assign ID_to_EX_zip = {

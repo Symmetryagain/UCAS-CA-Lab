@@ -5,12 +5,12 @@ module MEM(
         output  wire            MEM_allowin,
         // EX -> MEM
         input   wire            EX_to_MEM,
-        input   wire [145:0]    EX_to_MEM_zip,
-        input   wire [ 90:0]    EX_except_zip,
+        input   wire [177:0]    EX_to_MEM_zip,
+        input   wire [ 94:0]    EX_except_zip,
         // MEM -> WB
         output  wire            MEM_to_WB,
         output  wire [102:0]    MEM_to_WB_zip,
-        output  wire [122:0]    MEM_except_zip,
+        output  wire [126:0]    MEM_except_zip,
         // WB -> MEM
         input   wire            WB_allowin,
         // MEM -> top
@@ -33,10 +33,10 @@ module MEM(
         output  wire            MEM_is_load
 );
 
-reg  [145:0]    EX_to_MEM_reg;
+reg  [177:0]    EX_to_MEM_reg;
 always @(posedge clk) begin
         if (rst) begin
-                EX_to_MEM_reg <= 146'b0;
+                EX_to_MEM_reg <= 178'b0;
         end
         else if (EX_to_MEM) begin
                 EX_to_MEM_reg <= EX_to_MEM_zip;
@@ -46,10 +46,10 @@ always @(posedge clk) begin
         end
 end
 
-reg  [ 90:0]    EX_except_reg;
+reg  [ 94:0]    EX_except_reg;
 always @(posedge clk) begin
         if (rst) begin
-                EX_except_reg <= 91'b0;
+                EX_except_reg <= 95'b0;
         end
         else if (EX_to_MEM) begin
                 EX_except_reg <= EX_except_zip;
@@ -110,9 +110,6 @@ wire [3:0]      write_we_st_b;
 wire [3:0]      write_we_st_h;
 wire            is_csr;
 
-wire            except_ale;
-assign except_ale = EX_except_reg[0];
-
 assign front_valid = valid & gr_we;
 assign front_addr = rf_waddr;
 assign front_data = rf_wdata;
@@ -142,7 +139,7 @@ always @(posedge clk) begin
         if (rst | flush) begin
                 wait_addr_ok <= 1'b0;
         end
-        else if (init & valid & (res_from_mem | mem_we) & ~except_ale) begin
+        else if (init & valid & (res_from_mem | mem_we) & ~(|EX_except_reg[4:0])) begin
                 wait_addr_ok <= 1'b1;
         end
         else if (wait_addr_ok & data_sram_addr_ok) begin
@@ -172,7 +169,7 @@ always @(posedge clk) begin
         if (rst | flush) begin
                 readygo <= 1'b0;
         end
-        else if (init & valid & (~res_from_mem & ~mem_we | except_ale) | wait_data_ok & data_sram_data_ok) begin
+        else if (init & valid & (~res_from_mem & ~mem_we | (|EX_except_reg[4:0])) | wait_data_ok & data_sram_data_ok) begin
                 readygo <= 1'b1;
         end
         else if (readygo & WB_allowin) begin
@@ -189,7 +186,7 @@ assign  {
         EX_to_MEM_valid, pc, IR, 
         inst_ld_b, inst_ld_bu, inst_ld_h, inst_ld_hu, inst_ld_w, 
         inst_st_b, inst_st_h, inst_st_w, 
-        mem_we, res_from_mem, gr_we, rkd_value, rf_waddr, alu_result, is_csr
+        mem_we, res_from_mem, gr_we, rkd_value, rf_waddr, alu_result, is_csr, write_addr
 } = EX_to_MEM_reg;
 
 assign MEM_is_csr = valid & is_csr;
@@ -234,12 +231,11 @@ assign write_we         = {4{wait_addr_ok}} &
 
 assign write_size       = {(inst_ld_w | inst_st_w), (inst_ld_h | inst_ld_hu | inst_st_h)};
                         
-assign write_addr       = alu_result;
 assign write_data       = inst_st_b? {4{rkd_value[7:0]}}:
                           inst_st_h? {2{rkd_value[15:0]}}:
                           rkd_value;
 
 assign MEM_to_WB_zip = {valid, pc, IR, gr_we, rf_waddr, rf_wdata};
-assign MEM_except_zip = {EX_except_reg, write_addr};
+assign MEM_except_zip = {EX_except_reg, alu_result};
 
 endmodule

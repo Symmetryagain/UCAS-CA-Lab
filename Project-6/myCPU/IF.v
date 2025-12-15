@@ -4,8 +4,8 @@ module IF (
         input   wire            clk,
         input   wire            rst,
         // IF -> top
-        output  wire            inst_sram_en,
         output  wire [31:0]     pc_next,
+        output  wire            inst_sram_en,
         output  reg  [31:0]     pc_paddr,
         // top -> IF
         /// inst_sram
@@ -19,12 +19,11 @@ module IF (
         input   wire [31:0]     pc_trans,
         input   wire            except_tlbr,
         input   wire            except_pif,
-        input   wire            except_pme,
         input   wire            except_ppi,
         // IF -> ID
         output  wire            IF_to_ID,
         output  wire [65:0]     IF_to_ID_zip,
-        output  wire [ 4:0]     IF_except_zip,
+        output  wire [ 3:0]     IF_except_zip,
         // ID -> IF
         input   wire            ID_allowin,
         input   wire            ID_flush,
@@ -59,9 +58,8 @@ reg             readygo;
 reg  [31:0]     last_target;
 
 assign IF_to_ID         = readygo & ID_allowin;
-// assign IF_to_ID_zip     = {~g_flush, predict, IR, pc, except_adef};
 assign IF_to_ID_zip     = {~g_flush, pc, IR, predict};
-assign IF_except_zip    = {except_adef, except_tlbr, except_pif, except_pme, except_ppi};
+assign IF_except_zip    = {except_adef, except_tlbr, except_pif, except_ppi};
 assign inst_sram_en     = wait_addr_ok | lock_addr;
 assign pc_next          = flush ? flush_target : 
                                 ID_flush ? ID_flush_target : 

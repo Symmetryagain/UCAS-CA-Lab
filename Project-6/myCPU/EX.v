@@ -11,15 +11,28 @@ module EX(
         // ID -> EX
         input   wire            ID_to_EX,
         input   wire [198:0]    ID_to_EX_zip,
-        input   wire [ 89:0]    ID_except_zip,
+        input   wire [ 88:0]    ID_except_zip,
         // EX -> MEM
         output  wire            EX_to_MEM,
-        output  wire [145:0]    EX_to_MEM_zip,
-        output  wire [ 90:0]    EX_except_zip,
+        output  wire [177:0]    EX_to_MEM_zip,
+        output  wire [ 94:0]    EX_except_zip,
         // MEM -> EX
         input   wire            MEM_allowin,
+        // EX -> top
+        output  wire            mmu_en,
+        output  wire            mem_we,
+        output  wire [ 31:0]    alu_result,
         // top -> EX
+        /// mmu
+        input   wire [ 31:0]    addr_trans,
+        input   wire            except_tlbr,
+        input   wire            except_pil,
+        input   wire            except_pis,
+        input   wire            except_pme,
+        input   wire            except_ppi,
+        /// flush
         input   wire            flush,
+        /// counter
         input   wire [ 63:0]    counter
 );
 
@@ -41,10 +54,10 @@ always @(posedge clk) begin
         end
 end
 
-reg  [89:0]     ID_except_reg;
+reg  [88:0]     ID_except_reg;
 always @(posedge clk) begin
         if (rst) begin
-                ID_except_reg <= 90'b0;
+                ID_except_reg <= 89'b0;
         end
         else if (ID_to_EX) begin
                 ID_except_reg <= ID_except_zip;
@@ -93,7 +106,7 @@ wire            inst_div;
 wire            inst_divu;
 wire            inst_mod;
 wire            inst_modu;
-wire            mem_we;
+// wire            mem_we;
 wire            res_from_mem;
 wire            gr_we;
 wire [31:0]     rkd_value;
@@ -126,7 +139,6 @@ assign  {
 assign EX_is_csr = valid & is_csr;
 assign EX_is_load = valid & res_from_mem;
 
-wire [31:0]     alu_result;
 wire [31:0]     compute_result;
 wire [32:0]     mul_src1;
 wire [32:0]     mul_src2;
@@ -148,9 +160,9 @@ assign          compute_result  = inst_mul?                     prod[31:0]:
 wire            use_div;
 wire            use_udiv;
 wire            div_or_udiv;
-assign use_div = inst_div | inst_mod;
-assign use_udiv = inst_divu | inst_modu;
-assign div_or_udiv = use_div | use_udiv;
+assign use_div     = inst_div  | inst_mod;
+assign use_udiv    = inst_divu | inst_modu;
+assign div_or_udiv = use_div   | use_udiv;
 
 wire [63:0]     div_result;
 wire            div_src_valid;
@@ -179,6 +191,8 @@ assign div_src_valid = wait_src_ready;
 assign udiv_src_valid = wait_src_ready;
 assign div_res_ready = wait_res_valid;
 assign udiv_res_ready = wait_res_valid;
+
+assign mmu_en = valid & (res_from_mem | mem_we);
 
 reg             init;
 reg             wait_src_ready;
@@ -281,9 +295,9 @@ assign EX_to_MEM_zip = {
         inst_ld_b, inst_ld_bu, inst_ld_h, inst_ld_hu, inst_ld_w, 
         inst_st_b, inst_st_h, inst_st_w,
         mem_we, res_from_mem, gr_we, rkd_value, rf_waddr,
-        compute_result, is_csr
+        compute_result, is_csr, addr_trans
 };
 
-assign EX_except_zip = {ID_except_reg, except_ale};
+assign EX_except_zip = {ID_except_reg, except_ale, except_tlbr, except_pil, except_pis, except_pme, except_ppi};
 
 endmodule

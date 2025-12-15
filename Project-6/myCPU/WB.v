@@ -6,7 +6,7 @@ module WB(
         // MEM -> WB
         input   wire            MEM_to_WB,
         input   wire [102:0]    MEM_to_WB_zip,
-        input   wire [122:0]    MEM_except_zip,
+        input   wire [126:0]    MEM_except_zip,
         // WB -> MEM
         output  wire            WB_allowin,
         // WB -> top
@@ -51,10 +51,10 @@ always @(posedge clk) begin
         end
 end
 
-reg  [122:0]    MEM_except_reg;
+reg  [126:0]    MEM_except_reg;
 always @(posedge clk) begin
         if (rst) begin
-                MEM_except_reg <= 123'b0;
+                MEM_except_reg <= 127'b0;
         end
         else if (MEM_to_WB) begin
                 MEM_except_reg <= MEM_except_zip;
@@ -68,10 +68,14 @@ wire            MEM_to_WB_valid;
 wire [31:0]     pc;
 wire [31:0]     IR;
 wire            gr_we;
-wire            except_tlbr;
+wire            except_tlbr_if;
+wire            except_tlbr_mem;
 wire            except_pif;
+wire            except_pil;
+wire            except_pis;
 wire            except_pme;
-wire            except_ppi;
+wire            except_ppi_if;
+wire            except_ppi_mem;
 wire            except_adef;
 wire            except_sys;
 wire            except_ale;
@@ -102,8 +106,9 @@ assign {
 assign {
         csr_re, csr_we, csr_wmask, csr_wvalue, csr_num, 
         inst_ertn, 
-        except_adef, except_tlbr, except_pif, except_pme, except_ppi,
-        except_sys, except_brk, except_ine, except_int, except_ale,
+        except_adef, except_tlbr_if, except_pif, except_pme, except_ppi_if,
+        except_sys, except_brk, except_ine, except_int, 
+        except_ale, except_tlbr_mem, except_pil, except_pis, except_ppi_mem,
         wb_vaddr
 } = MEM_except_reg;
 
@@ -112,22 +117,27 @@ assign rf_wdata_final   = csr_re ? csr_rvalue : rf_wdata;
 assign inst_retire      = {pc, {4{rf_wen}}, rf_waddr, rf_wdata_final};
 
 assign wb_ex            = valid & (
-                                except_adef | except_tlbr | except_pif | except_pme | except_ppi |
-                                except_sys | except_brk | except_ine | except_int | except_ale        
+                                except_adef | except_tlbr_if  | except_pif | except_pme | except_ppi_if |
+                                except_sys  | except_brk      | except_ine | except_int | 
+                                except_ale  | except_tlbr_mem | except_pil | except_pis | except_ppi_mem    
                         );
 assign ertn_flush       = valid & inst_ertn;
 assign wb_pc            = pc;
 
 assign wb_ecode         = except_int?  `ECODE_INT:
-                                except_adef? `ECODE_ADE:
-                                except_tlbr? `ECODE_TLBR:
-                                except_pif?  `ECODE_PIF:
-                                except_pme?  `ECODE_PME:
-                                except_ppi?  `ECODE_PPI:
-                                except_sys?  `ECODE_SYS:
-                                except_ine?  `ECODE_INE:
-                                except_brk?  `ECODE_BRK:
-                                except_ale?  `ECODE_ALE: 
+                                except_adef?    `ECODE_ADE:
+                                except_tlbr_if? `ECODE_TLBR:
+                                except_pif?     `ECODE_PIF:
+                                except_pme?     `ECODE_PME:
+                                except_ppi_if?  `ECODE_PPI:
+                                except_sys?     `ECODE_SYS:
+                                except_ine?     `ECODE_INE:
+                                except_brk?     `ECODE_BRK:
+                                except_ale?     `ECODE_ALE:
+                                except_tlbr_mem?`ECODE_TLBR: 
+                                except_pil?     `ECODE_PIL:
+                                except_pis?     `ECODE_PIS:
+                                except_ppi_mem? `ECODE_PPI:
                                 6'b0;
 assign wb_esubcode      = //inst_syscall ? `ESUBCODE_NONE : 
                                 9'd0;
