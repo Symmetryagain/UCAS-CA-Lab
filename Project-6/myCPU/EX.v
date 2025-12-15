@@ -10,11 +10,11 @@ module EX(
         output  wire            EX_is_load,
         // ID -> EX
         input   wire            ID_to_EX,
-        input   wire [198:0]    ID_to_EX_zip,
+        input   wire [203:0]    ID_to_EX_zip,
         input   wire [ 88:0]    ID_except_zip,
         // EX -> MEM
         output  wire            EX_to_MEM,
-        output  wire [177:0]    EX_to_MEM_zip,
+        output  wire [182:0]    EX_to_MEM_zip,
         output  wire [ 94:0]    EX_except_zip,
         // MEM -> EX
         input   wire            MEM_allowin,
@@ -41,10 +41,10 @@ assign valid = ID_to_EX_valid & at_state & ~flush;
 
 assign EX_to_MEM = readygo & MEM_allowin;
 
-reg  [198:0]    ID_to_EX_reg;
+reg  [203:0]    ID_to_EX_reg;
 always @(posedge clk) begin
         if (rst) begin
-                ID_to_EX_reg <= 199'b0;
+                ID_to_EX_reg <= 204'b0;
         end
         else if (ID_to_EX) begin
                 ID_to_EX_reg <= ID_to_EX_zip;
@@ -106,7 +106,7 @@ wire            inst_div;
 wire            inst_divu;
 wire            inst_mod;
 wire            inst_modu;
-// wire            mem_we;
+
 wire            res_from_mem;
 wire            gr_we;
 wire [31:0]     rkd_value;
@@ -117,6 +117,12 @@ wire            except_ale;
 wire            inst_rdcntvh;
 wire            inst_rdcntvl;
 wire            is_csr;
+
+wire            inst_tlbsrch;
+wire            inst_tlbrd;
+wire            inst_tlbwr;
+wire            inst_tlbfill;
+wire            inst_invtlb;
 
 assign except_ale = (|alu_result[1:0]) & (inst_st_w | inst_ld_w) 
                   | alu_result[0] & (inst_st_h | inst_ld_h | inst_ld_hu);
@@ -133,7 +139,8 @@ assign  {
         inst_st_b, inst_st_h, inst_st_w,
         mem_we, res_from_mem, gr_we, rkd_value, rf_waddr,
         inst_mul, inst_mulh, inst_mulhu, inst_div, inst_mod, inst_divu, inst_modu, 
-        inst_rdcntvh, inst_rdcntvl, is_csr
+        inst_rdcntvh, inst_rdcntvl, is_csr,
+        inst_tlbsrch, inst_tlbrd, inst_tlbwr, inst_tlbfill, inst_invtlb
 } = ID_to_EX_reg;
 
 assign EX_is_csr = valid & is_csr;
@@ -295,7 +302,8 @@ assign EX_to_MEM_zip = {
         inst_ld_b, inst_ld_bu, inst_ld_h, inst_ld_hu, inst_ld_w, 
         inst_st_b, inst_st_h, inst_st_w,
         mem_we, res_from_mem, gr_we, rkd_value, rf_waddr,
-        compute_result, is_csr, addr_trans
+        compute_result, is_csr, addr_trans,
+        inst_tlbsrch, inst_tlbrd, inst_tlbwr, inst_tlbfill, inst_invtlb
 };
 
 assign EX_except_zip = {ID_except_reg, except_ale, except_tlbr, except_pil, except_pis, except_pme, except_ppi};

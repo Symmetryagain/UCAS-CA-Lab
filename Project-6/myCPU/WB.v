@@ -5,7 +5,7 @@ module WB(
         input   wire            rst,
         // MEM -> WB
         input   wire            MEM_to_WB,
-        input   wire [102:0]    MEM_to_WB_zip,
+        input   wire [106:0]    MEM_to_WB_zip,
         input   wire [126:0]    MEM_except_zip,
         // WB -> MEM
         output  wire            WB_allowin,
@@ -25,6 +25,8 @@ module WB(
         output  wire [ 5:0]     wb_ecode,
         output  wire [ 8:0]     wb_esubcode,
         output  wire [31:0]     wb_vaddr,
+        output  wire            tlb_flush,
+        output  wire [31:0]     tlb_flush_target,
         // top -> WB
         input   wire [31:0]     csr_rvalue,
 
@@ -38,10 +40,14 @@ module WB(
 wire            valid;
 assign valid = MEM_to_WB_valid & at_state;
 
-reg  [102:0]    MEM_to_WB_reg;
+wire            inst_tlbwr;
+wire            inst_tlbfill;
+wire            inst_invtlb;
+
+reg  [106:0]    MEM_to_WB_reg;
 always @(posedge clk) begin
         if (rst) begin
-                MEM_to_WB_reg <= 103'b0;
+                MEM_to_WB_reg <= 107'b0;
         end
         else if (MEM_to_WB) begin
                 MEM_to_WB_reg <= MEM_to_WB_zip;
@@ -98,9 +104,10 @@ always @(posedge clk) begin
 end
 
 assign WB_allowin       = 1'b1;
+assign tlb_flush        = inst_tlbwr | inst_tlbfill | inst_invtlb;
 
 assign {
-    MEM_to_WB_valid, pc, IR, gr_we, rf_waddr, rf_wdata
+    MEM_to_WB_valid, pc, IR, gr_we, rf_waddr, rf_wdata, inst_tlbrd, inst_tlbwr, inst_tlbfill, inst_invtlb
 } = MEM_to_WB_reg;
 
 assign {

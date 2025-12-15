@@ -2,27 +2,7 @@ module mycpu_top(
     input  wire        aclk,
     input  wire        aresetn,
 
-    // output wire        inst_sram_req    ,
-    // output wire        inst_sram_wr     ,
-    // output wire [ 1:0] inst_sram_size   ,
-    // output wire [ 3:0] inst_sram_wstrb  ,
-    // output wire [31:0] inst_sram_addr   ,
-    // output wire [31:0] inst_sram_wdata  ,
-    // input  wire        inst_sram_addr_ok,
-    // input  wire        inst_sram_data_ok,
-    // input  wire [31:0] inst_sram_rdata  ,
-    
-    // output wire        data_sram_req    ,
-    // output wire        data_sram_wr     ,
-    // output wire [ 1:0] data_sram_size   ,
-    // output wire [ 3:0] data_sram_wstrb  ,
-    // output wire [31:0] data_sram_addr   ,
-    // output wire [31:0] data_sram_wdata  ,
-    // input  wire        data_sram_addr_ok,
-    // input  wire        data_sram_data_ok,
-    // input  wire [31:0] data_sram_rdata  ,
-
-     // ar    读请求通道
+    // ar    读请求通道
     output    [3:0]    arid,
     output    [31:0]   araddr,
     output    [7:0]    arlen,
@@ -121,9 +101,9 @@ wire            WB_allowin;
 
 // internal pipeline zipes
 wire [ 65:0]    IF_to_ID_zip;
-wire [198:0]    ID_to_EX_zip;
-wire [177:0]    EX_to_MEM_zip;
-wire [102:0]    MEM_to_WB_zip;
+wire [203:0]    ID_to_EX_zip;
+wire [182:0]    EX_to_MEM_zip;
+wire [106:0]    MEM_to_WB_zip;
 
 // IF <-> ID signals
 wire            ID_flush;
@@ -277,6 +257,8 @@ wire [1:0]  w_plv1;
 wire [1:0]  w_mat1;
 wire        w_d1;
 wire        w_v1;
+wire        tlb_flush;
+wire [31:0] tlb_flush_target;
 
 // AXI bridge instance
 bridge u_bridge (
@@ -464,7 +446,10 @@ MEM u_MEM (
     .EX_to_MEM      (EX_to_MEM),
     .MEM_to_WB      (MEM_to_WB),
     .MEM_is_csr     (MEM_is_csr),
-    .MEM_is_load    (MEM_is_load)
+    .MEM_is_load    (MEM_is_load),
+    .csr_asid_data  (csr_asid_data),
+    .csr_tlbehi_data(csr_tlbehi_data),
+    .csr_tlbidx_data(csr_tlbidx_data)
 );
 
 // WB instance
@@ -494,6 +479,8 @@ WB u_WB (
     .wb_esubcode    (wb_esubcode),
     .wb_vaddr       (wb_vaddr),
     .csr_rvalue     (csr_rvalue),
+    .tlb_flush      (tlb_flush),
+    .tlb_flush_target   (tlb_flush_target),
 
     .inst_tlbrd     (inst_tlbrd),
     .tlbehi_wdata   (tlbehi_wdata),
@@ -554,8 +541,8 @@ csr u_csr(
     .csr_tlbelo1_data(csr_tlbelo1_data)
 );
 
-assign flush = ertn_flush | wb_ex;
-assign flush_target = ertn_flush ? csr_era_pc : csr_eentry_data;
+assign flush = ertn_flush | wb_ex | tlb_flush;
+assign flush_target = ertn_flush ? csr_era_pc : wb_ex ? csr_eentry_data : tlb_flush_target;
 
 // tie-off instruction sram write controls (read-only from CPU)
 assign inst_sram_wstrb = 4'b0;

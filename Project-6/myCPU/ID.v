@@ -21,7 +21,7 @@ module ID(
         input   wire            has_int,
         // ID -> EX
         output  wire            ID_to_EX,
-        output  wire [198:0]    ID_to_EX_zip,
+        output  wire [203:0]    ID_to_EX_zip,
         output  wire [ 88:0]    ID_except_zip,
         // EX -> ID
         input   wire            EX_allowin,
@@ -400,7 +400,7 @@ assign  br_taken        = (  inst_beq  &  rj_eq_rd
                            | inst_b
                         ) & valid & readygo;
 assign  br_target       = (inst_beq | inst_bne | inst_bl | inst_b | inst_blt | inst_bge | inst_bltu | inst_bgeu) ? (pc + br_offs) :
-                                                   /*inst_jirl*/ (rj_value + jirl_offs);
+                                                /*inst_jirl*/ (rj_value + jirl_offs);
 
 assign  ID_flush        = ((br_taken ^ predict) | inst_jirl) & ~rst & valid;
 
@@ -428,14 +428,13 @@ assign except_int  = has_int;
 assign ID_to_EX_zip = {
         valid, 
         pc, inst,
-        src1_is_pc ? pc : rj_value,
-        src2_is_imm ? imm : rkd_value,
-        alu_op, 
+        src1_is_pc ? pc : rj_value, src2_is_imm ? imm : rkd_value, alu_op, 
         inst_ld_b, inst_ld_bu, inst_ld_h, inst_ld_hu, inst_ld_w, 
         inst_st_b, inst_st_h, inst_st_w, 
         mem_we, res_from_mem, gr_we, rkd_value, dest,
         inst_mul, inst_mulh, inst_mulhu, inst_div, inst_mod, inst_divu, inst_modu, 
-        inst_rdcntvh, inst_rdcntvl, is_csr
+        inst_rdcntvh, inst_rdcntvl, is_csr,
+        inst_tlbsrch, inst_tlbrd, inst_tlbwr, inst_tlbfill, inst_invtlb
 };
 
 assign ID_except_zip = {
