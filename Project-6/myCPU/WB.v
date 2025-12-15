@@ -115,13 +115,16 @@ assign wb_ex = valid & (except_sys | except_adef | except_brk | except_ine | exc
 assign ertn_flush = valid & inst_ertn;
 assign wb_pc = pc;
 
-assign wb_ecode    =    except_adef? `ECODE_ADE:
+assign wb_ecode    =    except_int?  `ECODE_INT:
+                        except_adef? `ECODE_ADE:
                         except_tlbr? `ECODE_TLBR:
+                        except_pif?  `ECODE_PIF:
+                        except_pme?  `ECODE_PME:
+                        except_ppi?  `ECODE_PPI:
                         except_sys?  `ECODE_SYS:
-                        except_ale?  `ECODE_ALE: 
-                        except_brk?  `ECODE_BRK:
                         except_ine?  `ECODE_INE:
-                        except_int?  `ECODE_INT:
+                        except_brk?  `ECODE_BRK:
+                        except_ale?  `ECODE_ALE: 
                         6'b0;
 assign wb_esubcode = //inst_syscall ? `ESUBCODE_NONE : 
                         9'd0;
