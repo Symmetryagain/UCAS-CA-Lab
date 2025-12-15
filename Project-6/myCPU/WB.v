@@ -131,21 +131,21 @@ assign wb_ex            = valid & (
 assign ertn_flush       = valid & inst_ertn;
 assign wb_pc            = pc;
 
-assign wb_ecode         = except_int?  `ECODE_INT:
-                                except_adef?    `ECODE_ADE:
-                                except_tlbr_if? `ECODE_TLBR:
-                                except_pif?     `ECODE_PIF:
-                                except_pme?     `ECODE_PME:
-                                except_ppi_if?  `ECODE_PPI:
-                                except_sys?     `ECODE_SYS:
-                                except_ine?     `ECODE_INE:
-                                except_brk?     `ECODE_BRK:
-                                except_ale?     `ECODE_ALE:
-                                except_tlbr_mem?`ECODE_TLBR: 
-                                except_pil?     `ECODE_PIL:
-                                except_pis?     `ECODE_PIS:
-                                except_ppi_mem? `ECODE_PPI:
-                                6'b0;
+assign wb_ecode         = except_int?     `ECODE_INT:
+                          except_adef?    `ECODE_ADE:
+                          except_tlbr_if? `ECODE_TLBR:
+                          except_pif?     `ECODE_PIF:
+                          except_pme?     `ECODE_PME:
+                          except_ppi_if?  `ECODE_PPI:
+                          except_sys?     `ECODE_SYS:
+                          except_ine?     `ECODE_INE:
+                          except_brk?     `ECODE_BRK:
+                          except_ale?     `ECODE_ALE:
+                          except_tlbr_mem?`ECODE_TLBR: 
+                          except_pil?     `ECODE_PIL:
+                          except_pis?     `ECODE_PIS:
+                          except_ppi_mem? `ECODE_PPI:
+                          6'b0;
 assign wb_esubcode      = //inst_syscall ? `ESUBCODE_NONE : 
                                 9'd0;
 

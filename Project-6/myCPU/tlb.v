@@ -127,8 +127,6 @@ assign r_mat1 = tlb_mat1[r_index];
 assign r_d1 = tlb_d1[r_index];
 assign r_v1 = tlb_v1[r_index];
 
-
-
 genvar i;
 generate
         for (i = 0; i < 16; i = i + 1) begin
@@ -179,10 +177,6 @@ assign s0_plv = (tlb_ps4MB[s0_index] & s0_vppn[8] | ~tlb_ps4MB[s0_index] & s0_va
 assign s0_mat = (tlb_ps4MB[s0_index] & s0_vppn[8] | ~tlb_ps4MB[s0_index] & s0_va_bit12) ? tlb_mat1[s0_index] : tlb_mat0[s0_index];
 assign s0_d   = (tlb_ps4MB[s0_index] & s0_vppn[8] | ~tlb_ps4MB[s0_index] & s0_va_bit12) ? tlb_d1[s0_index]   : tlb_d0[s0_index];
 assign s0_v   = (tlb_ps4MB[s0_index] & s0_vppn[8] | ~tlb_ps4MB[s0_index] & s0_va_bit12) ? tlb_v1[s0_index]   : tlb_v0[s0_index];
-
-
-
-
 
 assign s1_index = {4{match1[ 0]}} & 4'b0000 |
                   {4{match1[ 1]}} & 4'b0001 |
