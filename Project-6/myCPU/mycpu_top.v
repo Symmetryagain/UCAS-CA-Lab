@@ -186,10 +186,10 @@ wire            MEM_is_load;
 
 wire [31:0]     pc_next;
 wire [31:0]     pc_trans;
-wire            except_tlbrfl;
-wire            except_pinv;
-wire            except_pmod;
-wire            except_plvl;
+wire            except_tlbr;
+wire            except_pif;
+wire            except_pme;
+wire            except_ppi;
 
 // AXI bridge instance
 bridge u_bridge (
@@ -277,10 +277,10 @@ IF u_IF (
     .IF_to_ID       (IF_to_ID),
     .pc_next        (pc_next),
     .pc_trans       (pc_trans),
-    .except_tlbrfl  (except_tlbrfl),
-    .except_pinv    (except_pinv),
-    .except_pmod    (except_pmod),
-    .except_plvl    (except_plvl)
+    .except_tlbr    (except_tlbr),
+    .except_pif     (except_pif),
+    .except_pme     (except_pme),
+    .except_ppi     (except_ppi)
 );
 
 // ID instance
@@ -465,40 +465,40 @@ tlb u_tlb(
     .invtlb_valid   (ID_to_EX_zip[168]),    
     .invtlb_op      (ID_to_EX_zip[167:163]),
     .we             (MEM_to_WB_zip[102]),
-    .w_index       (MEM_to_WB_zip[101:98]),
-    .w_e           (MEM_to_WB_zip[97]),
-    .w_vppn        (MEM_to_WB_zip[96:78]),
-    .w_ps          (MEM_to_WB_zip[77:72]),
-    .w_asid        (MEM_to_WB_zip[71:62]),
-    .w_g           (MEM_to_WB_zip[61]),
-    .w_ppn0        (MEM_to_WB_zip[60:41]),
-    .w_plv0        (MEM_to_WB_zip[40:39]),
-    .w_mat0        (MEM_to_WB_zip[38:37]),
-    .w_d0          (MEM_to_WB_zip[36]),
-    .w_v0          (MEM_to_WB_zip[35]),
-    .w_ppn1        (MEM_to_WB_zip[34:15]),
-    .w_plv1        (MEM_to_WB_zip[14:13]),
-    .w_mat1        (MEM_to_WB_zip[12:11]),
-    .w_d1          (MEM_to_WB_zip[10]), 
-    .w_v1          (MEM_to_WB_zip[9]),
-    .r_index       (ID_to_EX_zip[162:159]),
-    .r_e           (),
-    .r_vppn        (),
-    .r_ps          (),
-    .r_asid        (),
-    .r_g           (),
-    .r_ppn0        (),
-    .r_plv0        (),
-    .r_mat0        (),
-    .r_d0          (),
-    .r_v0          (),
-    .r_ppn1        (),
-    .r_plv1        (),
-    .r_mat1        (),
-    .r_d1          (),
-    .r_v1          ()   
+    .w_index        (MEM_to_WB_zip[101:98]),
+    .w_e            (MEM_to_WB_zip[97]),
+    .w_vppn         (MEM_to_WB_zip[96:78]),
+    .w_ps           (MEM_to_WB_zip[77:72]),
+    .w_asid         (MEM_to_WB_zip[71:62]),
+    .w_g            (MEM_to_WB_zip[61]),
+    .w_ppn0         (MEM_to_WB_zip[60:41]),
+    .w_plv0         (MEM_to_WB_zip[40:39]),
+    .w_mat0         (MEM_to_WB_zip[38:37]),
+    .w_d0           (MEM_to_WB_zip[36]),
+    .w_v0           (MEM_to_WB_zip[35]),
+    .w_ppn1         (MEM_to_WB_zip[34:15]),
+    .w_plv1         (MEM_to_WB_zip[14:13]),
+    .w_mat1         (MEM_to_WB_zip[12:11]),
+    .w_d1           (MEM_to_WB_zip[10]), 
+    .w_v1           (MEM_to_WB_zip[9]),
+    .r_index        (ID_to_EX_zip[162:159]),
+    .r_e            (),
+    .r_vppn         (),
+    .r_ps           (),
+    .r_asid         (),
+    .r_g            (),
+    .r_ppn0         (),
+    .r_plv0         (),
+    .r_mat0         (),
+    .r_d0           (),
+    .r_v0           (),
+    .r_ppn1         (),
+    .r_plv1         (),
+    .r_mat1         (),
+    .r_d1           (),
+    .r_v1           ()   
 );
-// debug outputs from WB.inst_retire_reg
+
 // inst_retire_reg format: { pc(32), {4{rf_wen}}(4), rf_waddr(5), rf_wdata(32) }
 assign {
         debug_wb_pc,

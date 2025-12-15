@@ -28,11 +28,11 @@ module WB(
         // top -> WB
         input   wire [31:0]     csr_rvalue,
 
-        output                  inst_tlbrd,
-        output       [31:0]     tlbehi_wdata,
-        output       [31:0]     tlbelo0_wdata,
-        output       [31:0]     tlbelo1_wdata,
-        output       [31:0]     tlbidx_wdata
+        output  wire            inst_tlbrd,
+        output  wire [31:0]     tlbehi_wdata,
+        output  wire [31:0]     tlbelo0_wdata,
+        output  wire [31:0]     tlbelo1_wdata,
+        output  wire [31:0]     tlbidx_wdata
 );
 
 wire            valid;
@@ -93,7 +93,7 @@ always @(posedge clk) begin
         end
 end
 
-assign WB_allowin = 1'b1;
+assign WB_allowin       = 1'b1;
 
 assign {
     MEM_to_WB_valid, pc, IR, gr_we, rf_waddr, rf_wdata
@@ -107,27 +107,30 @@ assign {
         wb_vaddr
 } = MEM_except_reg;
 
-assign rf_wen   = valid & gr_we & ~wb_ex;
-assign rf_wdata_final = csr_re ? csr_rvalue : rf_wdata;
-assign inst_retire = {pc, {4{rf_wen}}, rf_waddr, rf_wdata_final};
+assign rf_wen           = valid & gr_we & ~wb_ex;
+assign rf_wdata_final   = csr_re ? csr_rvalue : rf_wdata;
+assign inst_retire      = {pc, {4{rf_wen}}, rf_waddr, rf_wdata_final};
 
-assign wb_ex = valid & (except_sys | except_adef | except_brk | except_ine | except_int | except_ale);
-assign ertn_flush = valid & inst_ertn;
-assign wb_pc = pc;
+assign wb_ex            = valid & (
+                                except_adef | except_tlbr | except_pif | except_pme | except_ppi |
+                                except_sys | except_brk | except_ine | except_int | except_ale        
+                        );
+assign ertn_flush       = valid & inst_ertn;
+assign wb_pc            = pc;
 
-assign wb_ecode    =    except_int?  `ECODE_INT:
-                        except_adef? `ECODE_ADE:
-                        except_tlbr? `ECODE_TLBR:
-                        except_pif?  `ECODE_PIF:
-                        except_pme?  `ECODE_PME:
-                        except_ppi?  `ECODE_PPI:
-                        except_sys?  `ECODE_SYS:
-                        except_ine?  `ECODE_INE:
-                        except_brk?  `ECODE_BRK:
-                        except_ale?  `ECODE_ALE: 
-                        6'b0;
-assign wb_esubcode = //inst_syscall ? `ESUBCODE_NONE : 
-                        9'd0;
+assign wb_ecode         = except_int?  `ECODE_INT:
+                                except_adef? `ECODE_ADE:
+                                except_tlbr? `ECODE_TLBR:
+                                except_pif?  `ECODE_PIF:
+                                except_pme?  `ECODE_PME:
+                                except_ppi?  `ECODE_PPI:
+                                except_sys?  `ECODE_SYS:
+                                except_ine?  `ECODE_INE:
+                                except_brk?  `ECODE_BRK:
+                                except_ale?  `ECODE_ALE: 
+                                6'b0;
+assign wb_esubcode      = //inst_syscall ? `ESUBCODE_NONE : 
+                                9'd0;
 
 // assign tlbehi_wdata = {};
 endmodule
