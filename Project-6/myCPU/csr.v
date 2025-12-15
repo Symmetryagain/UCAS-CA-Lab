@@ -145,6 +145,14 @@ assign csr_tlbidx_data = {csr_tlbidx_ne, 1'b0, csr_tlbidx_ps, 8'b0, csr_tlbidx_i
 // TLBEHI
 assign csr_tlbehi_data = {csr_tlbehi_vppn, 13'b0};
 
+wire page_err;
+assign page_err = wb_ecode == `ECODE_PIL
+               || wb_ecode == `ECODE_PIS
+               || wb_ecode == `ECODE_PIF
+               || wb_ecode == `ECODE_PME
+               || wb_ecode == `ECODE_PPI
+               || wb_ecode == `ECODE_TLBR;
+
 always @(posedge clk) begin
     if (reset) begin
         csr_tlbehi_vppn <= 19'b0;
@@ -155,6 +163,9 @@ always @(posedge clk) begin
     end
     else if (inst_tlbrd) begin
         csr_tlbehi_vppn <= tlbehi_wdata[`CSR_TLBEHI_VPPN];
+    end
+    else if (page_err) begin
+        csr_tlbehi_vppn <= wb_vaddr[`CSR_TLBEHI_VPPN];
     end
  end
 
@@ -459,8 +470,10 @@ always @(posedge clk) begin
 assign csr_ecfg_data  = {19'b0, csr_ecfg_lie};
 
 // BADV
-assign wb_ex_addr_err = wb_ecode==`ECODE_ADE || wb_ecode==`ECODE_ALE;
- always @(posedge clk) begin
+assign wb_ex_addr_err = wb_ecode == `ECODE_ADE 
+                     || wb_ecode == `ECODE_ALE 
+                     || page_err;
+always @(posedge clk) begin
     if (wb_ex && wb_ex_addr_err)
         csr_badv_vaddr <= (wb_ecode==`ECODE_ADE &&
                            wb_esubcode==`ESUBCODE_ADEF) ? wb_pc : wb_vaddr;
