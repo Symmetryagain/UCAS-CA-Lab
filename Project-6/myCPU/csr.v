@@ -190,7 +190,7 @@ always @(posedge clk) begin
         csr_tlbelo0_v   <= tlbelo0_wdata[`CSR_TLBELO_V];
     end
  end 
-assign csr_tlbelo0_data = {csr_tlbelo0_ppn, 1'b0, csr_tlbelo0_g, csr_tlbelo0_mat, csr_tlbelo0_plv, csr_tlbelo0_d, csr_tlbelo0_v};
+assign csr_tlbelo0_data = {4'b0, csr_tlbelo0_ppn, 1'b0, csr_tlbelo0_g, csr_tlbelo0_mat, csr_tlbelo0_plv, csr_tlbelo0_d, csr_tlbelo0_v};
 
 
 // TLBELO1
@@ -226,7 +226,7 @@ always @(posedge clk) begin
         csr_tlbelo1_v   <= tlbelo1_wdata[`CSR_TLBELO_V];
     end
  end
-assign csr_tlbelo1_data = {csr_tlbelo1_ppn, 1'b0, csr_tlbelo1_g, csr_tlbelo1_mat, csr_tlbelo1_plv, csr_tlbelo1_d, csr_tlbelo1_v};
+assign csr_tlbelo1_data = {4'b0, csr_tlbelo1_ppn, 1'b0, csr_tlbelo1_g, csr_tlbelo1_mat, csr_tlbelo1_plv, csr_tlbelo1_d, csr_tlbelo1_v};
 
 
 // ASID
