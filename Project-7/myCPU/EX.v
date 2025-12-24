@@ -173,12 +173,18 @@ wire [31:0]     compute_result;
 wire [32:0]     mul_src1;
 wire [32:0]     mul_src2;
 wire [65:0]     prod;
+reg  [65:0]     prod_reg;
 
 assign          mul_src1        = {~inst_mulhu & src1[31], src1};
 assign          mul_src2        = {~inst_mulhu & src2[31], src2};
 assign          prod            = $signed(mul_src1) * $signed(mul_src2);
-assign          compute_result  = inst_mul?                     prod[31:0]:
-                                  (inst_mulh | inst_mulhu)?     prod[63:32]:
+
+always @(posedge clk) begin
+        prod_reg <= prod;
+end
+
+assign          compute_result  = inst_mul?                     prod_reg[31:0]:
+                                  (inst_mulh | inst_mulhu)?     prod_reg[63:32]:
                                   inst_div?                     div_result[63:32]:
                                   inst_mod?                     div_result[31:0]:
                                   inst_divu?                    udiv_result[63:32]:
