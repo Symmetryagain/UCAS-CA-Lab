@@ -1,0 +1,90 @@
+`define PC_INIT 32'h1bfffffc
+
+`define CSR_CRMD    14'h00
+`define CSR_PRMD    14'h01
+`define CSR_EUEN    14'h02
+`define CSR_ECFG    14'h04
+`define CSR_ESTAT   14'h05
+`define CSR_ERA     14'h06
+`define CSR_BADV    14'h07
+`define CSR_EENTRY  14'h0c
+`define CSR_TLBIDX  14'h10
+`define CSR_TLBEHI  14'h11
+`define CSR_TLBELO0 14'h12
+`define CSR_TLBELO1 14'h13
+`define CSR_ASID    14'h18
+`define CSR_SAVE0   14'h30
+`define CSR_SAVE1   14'h31
+`define CSR_SAVE2   14'h32
+`define CSR_SAVE3   14'h33
+`define CSR_TID     14'h40
+`define CSR_TCFG    14'h41
+`define CSR_TVAL    14'h42
+`define CSR_TICLR   14'h44
+`define CSR_TLBRENTRY 14'h88
+`define CSR_DMW0    14'h180
+`define CSR_DMW1    14'h181
+
+`define CSR_CRMD_PLV    1:0
+`define CSR_CRMD_PIE    2
+`define CSR_CRMD_DA     3
+`define CSR_CRMD_PG     4
+`define CSR_CRMD_DATF   6:5
+`define CSR_CRMD_DATM   8:7
+
+`define CSR_PRMD_PPLV   1:0
+`define CSR_PRMD_PIE    2
+
+`define CSR_ESTAT_IS10  1:0
+`define CSR_ERA_PC      31:0
+`define CSR_EENTRY_VA   31:6
+`define CSR_SAVE_DATA   31:0
+`define CSR_TICLR_CLR   0
+
+`define CSR_ECFG_LIE    12:0
+
+`define CSR_TCFG_EN     0
+`define CSR_TCFG_PERIOD 1
+`define CSR_TCFG_INITV  31:2
+`define CSR_TID_TID     31:0
+
+`define CSR_ESTAT_ECODE 21:16
+
+`define ESUBCODE_ADEF   9'b00
+`define ECODE_INT       6'h00
+`define ECODE_PIL       6'h01
+`define ECODE_PIS       6'h02
+`define ECODE_PIF       6'h03
+`define ECODE_PME       6'h04
+`define ECODE_PPI       6'h07
+`define ECODE_ADE       6'h08
+`define ECODE_ALE       6'h09
+`define ECODE_SYS       6'h0B
+`define ECODE_BRK       6'h0C
+`define ECODE_INE       6'h0D
+`define ECODE_TLBR      6'h3F
+`define ESUBCODE_NONE   9'd0
+
+`define CSR_TLBIDX_INDEX 15:0
+`define CSR_TLBIDX_PS    29:24
+`define CSR_TLBIDX_NE    31
+
+`define CSR_TLBEHI_VPPN  31:13
+
+`define CSR_TLBELO_PPN   27:8
+`define CSR_TLBELO_G     6
+`define CSR_TLBELO_MAT   5:4
+`define CSR_TLBELO_PLV   3:2
+`define CSR_TLBELO_D     1      
+`define CSR_TLBELO_V     0
+
+`define CSR_ASID_ASID    9:0
+`define CSR_ASID_ASIDBITS 23:16
+
+`define CSR_TLBRENTRY_PA 31:6
+
+`define CSR_DMW_PLV0     0
+`define CSR_DMW_PLV3     3
+`define CSR_DMW_MAT      5:4
+`define CSR_DMW_PSEG     27:25
+`define CSR_DMW_VSEG     31:29
