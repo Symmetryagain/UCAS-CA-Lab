@@ -221,31 +221,36 @@ module cache (
     wire [19:0] way1_tag;
     wire        way0_v;
     wire        way1_v;
-    wire [20:0] tagv_way0_rdata;
-    wire [20:0] tagv_way1_rdata;
+    wire [20:0] tagv_w0_rdata;
+    wire [20:0] tagv_w1_rdata;
 
-    assign {way0_tag, way0_v} = tagv_way0_rdata;
-    assign {way1_tag, way1_v} = tagv_way1_rdata;
+    assign {way0_tag, way0_v} = tagv_w0_rdata;
+    assign {way1_tag, way1_v} = tagv_w1_rdata;
     assign way0_hit = way0_v && (way0_tag == reg_tag);
     assign way1_hit = way1_v && (way1_tag == reg_tag);
     assign cache_hit = way0_hit || way1_hit;
-
+    wire [20:0] tagv_wdata;
+    wire [ 7:0] tagv_addr;
+    wire        tagv_w0_en;
+    wire        tagv_w1_en;
+    wire        tagv_w0_we;
+    wire        tagv_w1_we;
 
     tagv_ram tagv_way0(
         .addra(tagv_addr),
         .clka(clk),
         .dina(tagv_wdata),
-        .douta(tagv_way0_rdata),
-        .ena(tagv_way0_en),
-        .wea(tagv_way0_we)
+        .douta(tagv_w0_rdata),
+        .ena(tagv_w0_en),
+        .wea(tagv_w0_we)
     );
     tagv_ram tagv_way1(
         .addra(tagv_addr),
         .clka(clk),
         .dina(tagv_wdata),
-        .douta(tagv_way1_rdata),
-        .ena(tagv_way1_en),
-        .wea(tagv_way1_we)
+        .douta(tagv_w1_rdata),
+        .ena(tagv_w1_en),
+        .wea(tagv_w1_we)
     );
 
     data_bank_ram data_way0_bank0(
@@ -324,12 +329,7 @@ module cache (
     end
     assign replace_way = random_way;
 
-    wire [20:0] tagv_wdata;
-    wire [ 7:0] tagv_addr;
-    wire        tagv_w0_en;
-    wire        tagv_w1_en;
-    wire        tagv_w0_we;
-    wire        tagv_w1_we;
+
 
     assign tagv_wdata = {reg_tag, 1'b1}; // 替换时将新数据写入tagv
     assign tagv_addr  = {8{check}} & index |              
@@ -370,11 +370,23 @@ module cache (
     assign replace_dirty = (replace_way == 1'b0) && dirty[0][reg_index] && way0_v 
                         || (replace_way == 1'b1) && dirty[1][reg_index] && way1_v;
     assign replace_data = replace_way? way1_data : way0_data;
- 
-    assign data_wdata = replace_write   ? ret_data :
+
+    wire [31:0] refill_data;
+    wire [31:0] rewrite_data;
+
+    assign rewrite_data = {{reg_wstrb[3]? reg_wdata[31:24] : ret_data[31:24]},
+                        {reg_wstrb[2]? reg_wdata[23:16] : ret_data[23:16]},
+                        {reg_wstrb[1]? reg_wdata[15: 8] : ret_data[15: 8]},
+                        {reg_wstrb[0]? reg_wdata[ 7: 0] : ret_data[ 7: 0]}};
+    // 写缺失时,要写的数据为内存旧数据叠加输入新数据，不能直接靠wstrb解决，因为wstrb为0就不再写入
+    assign refill_data = ((refill_counter == reg_offset[3:2]) && reg_op)? rewrite_data : //写缺失写回混合数据
+                                                                                        ret_data; //读缺失写回内存旧数据
+    assign data_wdata = replace_write   ? refill_data :
                         hitwrite ? hitwrite_data  : 32'b0;
-    assign data_addr  = (replace_write || hitwrite)       ? reg_index   :        // replace和写命中的addr都可用reg，因为还没有新的输入
-                        check              ? index       : 8'b0;
+
+    assign data_addr  = (replace_write) ? reg_index   :
+                        (hitwrite           ? hitwrite_index ://hitwrite后存的数据，可能已被更新，不能直接使用寄存
+                        (check              ? index       : 8'b0));
 
     assign data_w0_b0_en = check  && (offset[3:2] == 2'b00) || //此时读，不写
                         hitwrite && (hitwrite_way == 1'b0) && (hitwrite_bank == 2'b00)  || 
@@ -401,7 +413,7 @@ module cache (
                         hitwrite && (hitwrite_way == 1'b1) && (hitwrite_bank == 2'b11)  ||
                         replace_write && (replace_way == 1'b1) && (refill_counter == 2'b11);
 
-    assign data_w0_b0_we = {4{hitwrite && (hitwrite_way == 1'b0) && (hitwrite_bank == 2'b00)}} & hitwrite_strb | //考虑strb，写回ram的即是新数据
+    assign data_w0_b0_we = {4{hitwrite && (hitwrite_way == 1'b0) && (hitwrite_bank == 2'b00)}} & hitwrite_strb |
                         {4{replace_write&& (replace_way == 1'b0) && (refill_counter == 2'b00)}};
     assign data_w0_b1_we = {4{hitwrite && (hitwrite_way == 1'b0) && (hitwrite_bank == 2'b01)}} & hitwrite_strb |
                         {4{replace_write && (replace_way == 1'b0) && (refill_counter == 2'b01)}};
