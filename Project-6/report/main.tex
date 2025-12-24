@@ -1,0 +1,74 @@
+\documentclass{article}
+
+\usepackage[a4paper]{geometry}
+\geometry{left=2.5cm,right=2.5cm,top=3cm,bottom=3cm}
+\usepackage[UTF8,space,hyperref]{ctex}
+\usepackage{amsmath, amsthm, amssymb, bm, color, framed, graphicx, hyperref, mathrsfs, physics}
+\hypersetup{hidelinks,colorlinks=true,allcolors=black,pdfstartview=Fit,breaklinks=true}
+
+\title{Project 6 实验报告}
+\author{钱翰林 周远扬 石曜铭}
+\date{12/16/2025}
+
+\begin{document}
+\maketitle
+
+\section{小组分工情况说明}
+\begin{itemize}
+        \item 周远扬: 调试
+        \item 石曜铭: 设计tlb模块，添加tlb相关指令，调试
+        \item 钱翰林: 添加相关的CSR，报告撰写
+\end{itemize}
+
+\section{处理器结构设计图}
+\begin{figure}[htbp]
+        \centering
+        \includegraphics[width=16cm]{pics/graph.png}
+\end{figure}
+
+
+\section{主要设计点}
+
+\subsection{TLB模块设计}
+
+TLB模块的设计较为简单。读和写可以仿照寄存器堆类似地实现。对于查找，我们先算出match信号，再选择对应的index和tlb表项即可。对于invtlb指令，可以按照教材将逻辑拆分成4组cond[i]的组合，再根据invtlb\_op来设置clr的每一位，最后根据clr将相应的tlb\_e拉低。
+
+\subsection{TLB相关的控制状态寄存器设计}
+
+本次实验中，除了常规的CSR读写指令之外，TLBRD、TLBSRCH也会修改相应的CSR。需要注意的是TLBRD会同时修改多个CSR，原有的数据通路难以直接复用，需要额外添加接口。
+
+此外要注意补完CRMD的DA、PG、datf、datm域的逻辑。因为之前的cpu没有虚实地址转换的功能，DA和PG直接设为了固定值，在本次实验中需要修改。除了常规的读写之外，在初始化、触发TLB重填异常和ertn\_flush时也要按照指令手册的要求设置DA和PG域。BADV的修改条件也要扩展，加入PIS、PIF、PIL、PME、PPI、TLBR例外的出错虚地址。
+
+\subsection{TLB相关指令的添加}
+
+TLB读写指令在WB级实现，主要内容是按照指令手册添加数据通路，完成TLB数据和CSR的交互。添加了一个自增计数器tlb\_fill\_idx用于TLBFILL的随机填充。
+
+TLBSRCH在EX级实现，复用了访存地址转换的数据通路。INVTLB也在EX级实现，除了设置invtlb\_op和invtlb\_valid之外，还要复用s1\_asid和s1\_vppn。
+
+\subsection{MMU设计与TLB相关异常支持}
+
+MMU的功能是接收虚拟地址，根据当前的地址翻译模式决定是否查找DMW和TLB，最后返回物理地址和异常信号，整个模块完全使用组合逻辑实现。我们在mycpu\_top中实例化了两个MMU模块，分别用于取指级和访存级的虚实地址转换。MMU产生的异常信号返回cpu随流水级传递，在写回级根据指令手册规定的优先级进行选择。
+
+\section{调试}
+
+\subsection{s1\_asid信号多驱动}
+
+data\_mmu和EX级都向外输出了s1\_asid信号导致报错，因为tlbsrch指令的的asid要从寄存器得到，所以选择在EX级将地址转换和tlb指令的asid合并后输出。
+
+\subsection{开始时触发指令不存在例外}
+
+又一次遇到了这个问题，因为我们的设计是将next\_pc作为IF级虚地址进行转换，所以之前将初始PC设为32'h1c000000的方式不能继续沿用。因此我们选择把复位时的状态从$ wait\_addr\_ok$改为$readygo$，PC为32'h1bfffffc时不再发出取指请求。
+
+\subsection{tlb重填例外入口地址错误}
+
+触发tlb重填例外时的例外入口地址应设为为TLBRENTRY里存放的的值。注意不要与重取指令的target混淆。
+
+\subsection{TLB相关例外不互斥}
+
+一开始设计的TLB相关例外判断条件不互斥，只通过优先级进行选择，导致部分CSR设置出现错误。修改后ppi、pme、pis/pif/pil、tlbr的判断条件彼此互斥，问题解决。
+
+\subsection{MMU使能设置问题}
+
+在触发例外时没有及时拉低mmu的使能。
+
+\end{document}
