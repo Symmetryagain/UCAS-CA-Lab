@@ -556,7 +556,7 @@ regfile u_regfile (
 );
 
 // csr instance
-csr u_csr(
+csr u_csr (
     .clk        (clk),
     .reset      (~aresetn),
 
@@ -610,7 +610,7 @@ assign inst_sram_size  = 2'b10;
 assign data_sram_wr    = | data_sram_wstrb;
 
 // inst mmu instance
-mmu u_inst_mmu(
+mmu u_inst_mmu (
     .mem_we         (1'b0),
     .mmu_en         (1'b1),
     .vaddr          (pc_next),
@@ -641,7 +641,7 @@ mmu u_inst_mmu(
 );
 
 // data mmu instance
-mmu u_data_mmu(
+mmu u_data_mmu (
     .mem_we         (mem_we),
     .mmu_en         (mmu_en),
     .vaddr          (ex_vaddr),
@@ -671,9 +671,8 @@ mmu u_data_mmu(
     .except_ppi     (except_ppi_mem)
 );
 
-
 // tlb instance
-tlb u_tlb(
+tlb u_tlb (
     .clk            (clk),
     .s0_vppn        (s0_vppn),
     .s0_va_bit12    (s0_va_bit12),
@@ -734,6 +733,62 @@ tlb u_tlb(
     .r_mat1         (r_mat1),
     .r_d1           (r_d1),
     .r_v1           (r_v1)   
+);
+
+cache u_I_Cache (
+    .clk(),
+    .resetn(),
+    .valid(),
+    .op(),
+    .index(),
+    .tag(),
+    .offset(),
+    .wstrb(),
+    .wdata(),
+    .addr_ok(),
+    .data_ok(),
+    .rdata(),
+    .rd_req(),
+    .rd_type(),
+    .rd_addr(),
+    .rd_rdy(),
+    .ret_valid(),
+    .ret_last(),
+    .ret_data(),
+    .wr_req(),
+    .wr_type(),
+    .wr_addr(),
+    .wr_wstrb(),
+    .wr_data(),
+    .wr_rdy()
+);
+
+cache u_D_Cache (
+    .clk(),
+    .resetn(),
+    .valid(),
+    .op(),
+    .index(),
+    .tag(),
+    .offset(),
+    .wstrb(),
+    .wdata(),
+    .addr_ok(),
+    .data_ok(),
+    .rdata(),
+    .rd_req(),
+    .rd_type(),
+    .rd_addr(),
+    .rd_rdy(),
+    .ret_valid(),
+    .ret_last(),
+    .ret_data(),
+    .wr_req(),
+    .wr_type(),
+    .wr_addr(),
+    .wr_wstrb(),
+    .wr_data(),
+    .wr_rdy()
 );
 
 // inst_retire_reg format: { pc(32), {4{rf_wen}}(4), rf_waddr(5), rf_wdata(32) }
