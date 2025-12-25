@@ -30,7 +30,7 @@ module EX #(
         output  wire            invtlb_valid,
         output  wire [  4:0]    invtlb_op,
         output  wire [  9:0]    s1_asid,
-        output  wire [ 31:0]    vaddr,
+        output  reg  [ 31:0]    vaddr,
         // top -> EX
         /// mmu
         input   wire [ 31:0]    addr_trans,
@@ -180,7 +180,12 @@ assign          mul_src2        = {~inst_mulhu & src2[31], src2};
 assign          prod            = $signed(mul_src1) * $signed(mul_src2);
 
 always @(posedge clk) begin
-        prod_reg <= prod;
+        if(rst) begin
+                prod_reg <= 66'b0;
+        end
+        else begin
+                prod_reg <= prod;
+        end
 end
 
 assign          compute_result  = inst_mul?                     prod_reg[31:0]:
@@ -234,9 +239,20 @@ assign invtlb_valid = valid & inst_invtlb;
 assign invtlb_op = rf_waddr;
 assign s1_asid = inst_invtlb?   src1           [`CSR_ASID_ASID  ] : 
                                 csr_asid_data  [`CSR_ASID_ASID  ] ;
-assign vaddr   = inst_invtlb?  {rkd_value      [`CSR_TLBEHI_VPPN] , 13'b0} : 
+
+wire [31:0]     address;
+assign address = inst_invtlb?  {rkd_value      [`CSR_TLBEHI_VPPN] , 13'b0} : 
                  inst_tlbsrch? {csr_tlbehi_data[`CSR_TLBEHI_VPPN] , 13'b0} :
                                 alu_result                                 ;
+always @(posedge clk) begin
+        if(rst) begin
+                vaddr <= 32'b0;
+        end
+        else begin
+                vaddr <= address;
+        end
+end
+
 
 reg             init;
 reg             wait_src_ready;
