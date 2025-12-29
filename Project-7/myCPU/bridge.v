@@ -1,78 +1,78 @@
 module bridge(
-    input           aclk,
-    input           aresetn,
+        input   wire            aclk,
+        input   wire            aresetn,
 
-    // ICache 读接口
-    input               icache_rd_req,
-    input   [2:0]       icache_rd_type,
-    input   [31:0]      icache_rd_addr,
-    output              icache_rd_rdy,
-    output              icache_ret_valid,
-    output              icache_ret_last,
-    output  [31:0]      icache_ret_data,
-    
-    // DCache 读接口
-    input               dcache_rd_req,
-    input   [2:0]       dcache_rd_type,
-    input   [31:0]      dcache_rd_addr,
-    output              dcache_rd_rdy,
-    output              dcache_ret_valid,
-    output              dcache_ret_last,
-    output  [31:0]      dcache_ret_data,
-    
-    // DCache 写接口
-    input               dcache_wr_req,
-    input   [2:0]       dcache_wr_type,
-    input   [31:0]      dcache_wr_addr,
-    input   [3:0]       dcache_wr_wstrb,
-    input   [127:0]     dcache_wr_data,
-    output              dcache_wr_rdy,
+        // ICache 读接口
+        input   wire            icache_rd_req,
+        input   wire [  2:0]    icache_rd_type,
+        input   wire [ 31:0]    icache_rd_addr,
+        output  wire            icache_rd_rdy,
+        output  wire            icache_ret_valid,
+        output  wire            icache_ret_last,
+        output  wire [ 31:0]    icache_ret_data,
+        
+        // DCache 读接口
+        input   wire            dcache_rd_req,
+        input   wire [  2:0]    dcache_rd_type,
+        input   wire [ 31:0]    dcache_rd_addr,
+        output  wire            dcache_rd_rdy,
+        output  wire            dcache_ret_valid,
+        output  wire            dcache_ret_last,
+        output  wire [ 31:0]    dcache_ret_data,
+        
+        // DCache 写接口
+        input   wire            dcache_wr_req,
+        input   wire [  2:0]    dcache_wr_type,
+        input   wire [ 31:0]    dcache_wr_addr,
+        input   wire [  3:0]    dcache_wr_wstrb,
+        input   wire [127:0]    dcache_wr_data,
+        output  wire            dcache_wr_rdy,
 
-    // ar 读请求通道
-    output reg[3:0]    arid,
-    output reg[31:0]   araddr,
-    output reg[7:0]    arlen,
-    output reg[2:0]    arsize,    
-    output    [1:0]    arburst,
-    output    [1:0]    arlock,
-    output    [3:0]    arcache,
-    output    [2:0]    arprot,
-    output             arvalid, 
-    input              arready,
-    
-    // r 读响应通道
-    input  [3:0]       rid,
-    input  [31:0]      rdata,
-    input  [1:0]       rresp,
-    input              rlast,
-    input              rvalid,
-    output             rready,
+        // ar 读请求通道
+        output  reg  [  3:0]    arid,
+        output  reg  [ 31:0]    araddr,
+        output  reg  [  7:0]    arlen,
+        output  reg  [  2:0]    arsize,    
+        output  wire [  1:0]    arburst,
+        output  wire [  1:0]    arlock,
+        output  wire [  3:0]    arcache,
+        output  wire [  2:0]    arprot,
+        output  wire            arvalid, 
+        input   wire            arready,
+        
+        // r 读响应通道
+        input   wire [  3:0]    rid,
+        input   wire [ 31:0]    rdata,
+        input   wire [  1:0]    rresp,
+        input   wire            rlast,
+        input   wire            rvalid,
+        output  wire            rready,
 
-    // aw 写请求通道
-    output    [3:0]    awid,
-    output reg[31:0]   awaddr,
-    output reg[7:0]    awlen,
-    output reg[2:0]    awsize,
-    output    [1:0]    awburst,
-    output    [1:0]    awlock,
-    output    [3:0]    awcache,
-    output    [2:0]    awprot,
-    output             awvalid,
-    input              awready,
+        // aw 写请求通道
+        output  wire [  3:0]    awid,
+        output  reg  [ 31:0]    awaddr,
+        output  reg  [  7:0]    awlen,
+        output  reg  [  2:0]    awsize,
+        output  wire [  1:0]    awburst,
+        output  wire [  1:0]    awlock,
+        output  wire [  3:0]    awcache,
+        output  wire [  2:0]    awprot,
+        output  wire            awvalid,
+        input   wire            awready,
 
-    // w 写数据通道
-    output    [3:0]    wid,
-    output reg[31:0]   wdata,
-    output reg[3:0]    wstrb,
-    output             wlast,
-    output             wvalid,
-    input              wready,
+        // w 写数据通道
+        output  wire [  3:0]    wid,
+        output  reg  [ 31:0]    wdata,
+        output  reg  [  3:0]    wstrb,
+        output  wire            wlast,
+        output  wire            wvalid,
+        input   wire            wready,
 
-    // b 写响应通道
-    input  [3:0]       bid,
-    input  [1:0]       bresp,
-    input              bvalid,
-    output             bready
+        // b 写响应通道
+        input   wire [  3:0]    bid,
+        input   wire [  1:0]    bresp,
+        input   wire            bvalid,
+        output  wire            bready
 );
 
 // Cache 请求信号

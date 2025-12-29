@@ -1,31 +1,32 @@
 module cache (
-    input          clk,
-    input          resetn,
-    // interface to CPU
-    input          valid,
-    input          op, //0读1写
-    input  [ 7:0]  index,
-    input  [19:0]  tag,
-    input  [ 3:0]  offset,
-    input  [ 3:0]  wstrb,
-    input  [31:0]  wdata,
-    output         addr_ok,
-    output         data_ok,
-    output [31:0]  rdata,
-    // interface to axi
-    output         rd_req,
-    output [ 2:0]  rd_type,
-    output [31:0]  rd_addr,
-    input          rd_rdy,
-    input          ret_valid,
-    input          ret_last,
-    input  [31:0]  ret_data,
-    output         wr_req,
-    output [ 2:0]  wr_type,
-    output [31:0]  wr_addr,
-    output [ 3:0]  wr_wstrb,
-    output [127:0] wr_data,
-    input          wr_rdy
+        input   wire            clk,
+        input   wire            resetn,
+        // interface to CPU
+        input   wire            valid,
+        input   wire            op, //0读1写
+        input   wire            cacheable,
+        input   wire [  7:0]    index,
+        input   wire [ 19:0]    tag,
+        input   wire [  3:0]    offset,
+        input   wire [  3:0]    wstrb,
+        input   wire [ 31:0]    wdata,
+        output  wire            addr_ok,
+        output  wire            data_ok,
+        output  wire [ 31:0]    rdata,
+        // interface to bridge
+        output  wire            rd_req,
+        output  wire [  2:0]    rd_type,
+        output  wire [ 31:0]    rd_addr,
+        input   wire            rd_rdy,
+        input   wire            ret_valid,
+        input   wire            ret_last,
+        input   wire [ 31:0]    ret_data,
+        output  wire            wr_req,
+        output  wire [  2:0]    wr_type,
+        output  wire [ 31:0]    wr_addr,
+        output  wire [  3:0]    wr_wstrb,
+        output  wire [127:0]    wr_data,
+        input   wire            wr_rdy
 );
 // 主状态机状态
 localparam IDLE    = 5'b00001;
