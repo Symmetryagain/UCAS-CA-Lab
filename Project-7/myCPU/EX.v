@@ -19,7 +19,7 @@ module EX #(
         input   wire [  8:0]    ID_except_zip,
         // EX -> MEM
         output  wire            EX_to_MEM,
-        output  wire [262:0]    EX_to_MEM_zip,
+        output  wire [263:0]    EX_to_MEM_zip,
         output  wire [ 14:0]    EX_except_zip,
         // MEM -> EX
         input   wire            MEM_allowin,
@@ -34,6 +34,7 @@ module EX #(
         // top -> EX
         /// mmu
         input   wire [ 31:0]    addr_trans,
+        input   wire            addr_cacheable,
         input   wire            except_tlbr,
         input   wire            except_pil,
         input   wire            except_pis,
@@ -355,7 +356,7 @@ assign EX_to_MEM_zip = {
         inst_ld_b, inst_ld_bu, inst_ld_h, inst_ld_hu, inst_ld_w, 
         inst_st_b, inst_st_h, inst_st_w,
         mem_we, res_from_mem, gr_we, rkd_value, rf_waddr,
-        compute_result, is_csr, addr_trans,
+        compute_result, is_csr, addr_trans, addr_cacheable,
         inst_tlbsrch, inst_tlbrd, inst_tlbwr, inst_tlbfill, inst_invtlb,
         csr_re, csr_we, 
         csr_wmask | {16'b0, {16{inst_tlbsrch & s1_found}}}, 

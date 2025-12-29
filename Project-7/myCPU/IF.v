@@ -5,18 +5,20 @@ module IF (
         input   wire            rst,
         // IF -> top
         output  wire [31:0]     pc_next,
-        output  wire            inst_sram_en,
+        output  wire            inst_req,
         output  reg  [31:0]     pc_paddr,
+        output  reg             cacheable,
         // top -> IF
-        /// inst_sram
-        input   wire            inst_sram_addr_ok,
-        input   wire            inst_sram_data_ok,
+        /// I-Cache
+        input   wire            icache_addr_ok,
+        input   wire            icache_data_ok,
         input   wire [31:0]     inst,
         /// flush
         input   wire            flush,
         input   wire [31:0]     flush_target,
         /// mmu
         input   wire [31:0]     pc_trans,
+        input   wire            pc_cacheable,
         input   wire            except_tlbr,
         input   wire            except_pif,
         input   wire            except_ppi,
@@ -52,17 +54,17 @@ reg  [31:0]     last_target;
 assign IF_to_ID         = readygo & ID_allowin;
 assign IF_to_ID_zip     = {valid & ~g_flush, pc, IR, predict};
 assign IF_except_zip    = {except_adef, except_tlbr, except_pif, except_ppi};
-assign inst_sram_en     = wait_addr_ok | lock_addr;
+assign inst_req         = wait_addr_ok | lock_addr;
 assign pc_next          = flush ? flush_target : 
                                 ID_flush ? ID_flush_target : 
                                 lock_data ? last_target : pc + 4;
 assign except_adef      = (|pc[1:0]);
 assign g_flush          = flush | ID_flush;
 assign predict          = 1'b0;
-assign nxt_is_wait_addr_ok      = wait_data_ok & g_flush & inst_sram_data_ok
+assign nxt_is_wait_addr_ok      = wait_data_ok & g_flush & icache_data_ok
                                 | readygo & g_flush 
                                 | readygo & ID_allowin 
-                                | lock_data & inst_sram_data_ok;
+                                | lock_data & icache_data_ok;
 
 always @(posedge clk) begin
         if (rst) begin
@@ -95,7 +97,7 @@ always @(posedge clk) begin
         else if (nxt_is_wait_addr_ok) begin
                 wait_addr_ok <= 1'b1;
         end
-        else if (wait_addr_ok & inst_sram_addr_ok | wait_addr_ok & g_flush) begin
+        else if (wait_addr_ok & icache_addr_ok | wait_addr_ok & g_flush) begin
                 wait_addr_ok <= 1'b0;
         end
         else begin
@@ -107,10 +109,10 @@ always @(posedge clk) begin
         if (rst | g_flush) begin
                 wait_data_ok <= 1'b0;
         end
-        else if (wait_addr_ok & inst_sram_addr_ok) begin
+        else if (wait_addr_ok & icache_addr_ok) begin
                 wait_data_ok <= 1'b1;
         end
-        else if (wait_data_ok & inst_sram_data_ok) begin
+        else if (wait_data_ok & icache_data_ok) begin
                 wait_data_ok <= 1'b0;
         end
         else begin
@@ -125,7 +127,7 @@ always @(posedge clk) begin
         else if (g_flush) begin
                 readygo <= 1'b0;
         end
-        else if (wait_data_ok & inst_sram_data_ok) begin
+        else if (wait_data_ok & icache_data_ok) begin
                 readygo <= 1'b1;
         end
         else if (readygo & ID_allowin) begin
@@ -140,10 +142,10 @@ always @(posedge clk) begin
         if (rst) begin
                 lock_addr <= 1'b0;
         end
-        else if (wait_addr_ok & g_flush & ~inst_sram_addr_ok) begin
+        else if (wait_addr_ok & g_flush & ~icache_addr_ok) begin
                 lock_addr <= 1'b1;
         end
-        else if (lock_addr & inst_sram_addr_ok) begin 
+        else if (lock_addr & icache_addr_ok) begin 
                 lock_addr <= 1'b0;
         end
         else begin
@@ -155,10 +157,10 @@ always @(posedge clk) begin
         if (rst) begin
                 lock_data <= 1'b0;
         end
-        else if (wait_addr_ok & g_flush & inst_sram_addr_ok | lock_addr & inst_sram_addr_ok | wait_data_ok & g_flush & ~inst_sram_data_ok) begin
+        else if (wait_addr_ok & g_flush & ~icache_addr_ok | lock_addr & icache_addr_ok | wait_data_ok & g_flush & ~icache_data_ok) begin
                 lock_data <= 1'b1;
         end
-        else if (lock_data & inst_sram_data_ok) begin 
+        else if (lock_data & icache_data_ok) begin 
                 lock_data <= 1'b0;
         end
         else begin
@@ -170,7 +172,7 @@ always @(posedge clk) begin
         if (rst) begin
                 IR <= 32'b0;
         end
-        else if (wait_data_ok & inst_sram_data_ok) begin
+        else if (wait_data_ok & icache_data_ok) begin
                 IR <= inst;
         end
         else begin
@@ -187,6 +189,18 @@ always @(posedge clk) begin
         end
         else begin
                 pc_paddr <= pc_paddr;
+        end
+end
+
+always @(posedge clk) begin
+        if (rst) begin
+                cacheable <= 1'b0;
+        end
+        else if (nxt_is_wait_addr_ok) begin
+                cacheable <= pc_cacheable;
+        end
+        else begin
+                cacheable <= cacheable;
         end
 end
 

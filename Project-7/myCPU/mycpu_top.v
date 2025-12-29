@@ -73,28 +73,20 @@ always @(posedge clk) begin
         end
 end
 
-// SRAM
-wire            inst_sram_req;
-wire            inst_sram_wr;
-wire [ 1:0]     inst_sram_size;
-wire [31:0]     inst_sram_addr;
-wire [ 3:0]     inst_sram_wstrb;
-wire [31:0]     inst_sram_wdata;
-wire [31:0]     inst_sram_rdata;
-wire            inst_sram_addr_ok;
-wire            inst_sram_data_ok;
+// I-Cache <-> CPU
+wire            icache_valid;
+wire            icache_op;
+wire            icache_cacheable;
+wire [ 7:0]     icache_index;
+wire [19:0]     icache_tag;
+wire [ 3:0]     icache_offset;
+wire [ 3:0]     icache_wstrb;
+wire [31:0]     icache_wdata;
+wire            icache_addr_ok;
+wire            icache_data_ok;
+wire [31:0]     icache_rdata;
 
-wire            data_sram_req;
-wire            data_sram_wr;
-wire [ 1:0]     data_sram_size;
-wire [31:0]     data_sram_addr;
-wire [ 3:0]     data_sram_wstrb;
-wire [31:0]     data_sram_wdata;
-wire [31:0]     data_sram_rdata;
-wire            data_sram_addr_ok;
-wire            data_sram_data_ok;
-
-// ICache read
+// I-Cache read
 wire            icache_rd_req;
 wire [ 2:0]     icache_rd_type;
 wire [31:0]     icache_rd_addr;
@@ -103,7 +95,20 @@ wire            icache_ret_valid;
 wire            icache_ret_last;
 wire [31:0]     icache_ret_data;
 
-// DCache read
+// D-Cache <-> CPU
+wire            dcache_valid;
+wire            dcache_op;
+wire            dcache_cacheable;
+wire [ 7:0]     dcache_index;
+wire [19:0]     dcache_tag;
+wire [ 3:0]     dcache_offset;
+wire [ 3:0]     dcache_wstrb;
+wire [31:0]     dcache_wdata;
+wire            dcache_addr_ok;
+wire            dcache_data_ok;
+wire [31:0]     dcache_rdata;
+
+// D-Cache read
 wire            dcache_rd_req;
 wire [ 2:0]     dcache_rd_type;
 wire [31:0]     dcache_rd_addr;
@@ -112,13 +117,23 @@ wire            dcache_ret_valid;
 wire            dcache_ret_last;
 wire [31:0]     dcache_ret_data;
 
-// DCache write
+// D-Cache write
 wire            dcache_wr_req;
 wire [  2:0]    dcache_wr_type;
 wire [ 31:0]    dcache_wr_addr;
 wire [  3:0]    dcache_wr_wstrb;
 wire [127:0]    dcache_wr_data;
 wire            dcache_wr_rdy;
+
+wire            inst_req;
+wire [ 31:0]    pc_paddr;
+wire            pc_cacheable;
+wire            addr_cacheable;
+wire            data_req;
+wire [  3:0]    data_wstrb;
+wire [ 31:0]    data_waddr;
+wire [ 31:0]    data_wdata;
+wire [ 31:0]    data_rdata;
 
 // allowin
 wire            ID_allowin;
@@ -129,7 +144,7 @@ wire            WB_allowin;
 // internal pipeline zipes
 wire [ 65:0]    IF_to_ID_zip;
 wire [283:0]    ID_to_EX_zip;
-wire [262:0]    EX_to_MEM_zip;
+wire [263:0]    EX_to_MEM_zip;
 wire [186:0]    MEM_to_WB_zip;
 
 // IF <-> ID signals
@@ -220,7 +235,6 @@ wire            except_ppi_mem;
 
 wire            mem_we;
 wire            mmu_en;
-wire [31:0]     vaddr_ex;
 wire [31:0]     addr_trans;
 
 wire [31:0]     csr_dmw0_data;
@@ -294,14 +308,24 @@ wire [31:0]     tlb_flush_target;
 assign flush    = ertn_flush | wb_ex | tlb_flush;
 assign flush_target     = ertn_flush? csr_era_pc : 
                           wb_ex?      {32{except_tlbr}} & csr_tlbrentry_data | {32{~except_tlbr}} & csr_eentry_data : 
-                          tlb_flush_target ;
+                          tlb_flush_target;
 
-// tie-off instruction sram write controls
-assign inst_sram_wstrb  = 4'b0;
-assign inst_sram_wdata  = 32'b0;
-assign inst_sram_wr     = |inst_sram_wstrb;
-assign inst_sram_size   = 2'b10;
-assign data_sram_wr     = |data_sram_wstrb;
+assign icache_valid     = inst_req;
+assign icache_op        = 1'b0;
+assign {
+        icache_tag, 
+        icache_index, 
+        icache_offset
+} = pc_paddr;
+
+assign dcache_valid     = data_req;
+assign dcache_op        = mem_we;
+assign {
+        dcache_tag,
+        dcache_index,
+        dcache_offset
+} = data_waddr;
+assign data_rdata       = dcache_rdata;
 
 // inst_retire_reg format: { pc(32), {4{rf_wen}}(4), rf_waddr(5), rf_wdata(32) }
 assign {
@@ -386,15 +410,17 @@ IF u_IF (
         .clk            (clk),
         .rst            (reset),
         .ID_flush       (ID_flush),
-        .inst           (inst_sram_rdata),
+        .inst           (icache_rdata),
         .ID_flush_target(ID_pc_real),
-        .pc_paddr       (inst_sram_addr),
+        .pc_paddr       (pc_paddr),
+        .cacheable      (icache_cacheable),
         .IF_to_ID_zip   (IF_to_ID_zip),
         .IF_except_zip  (IF_except_zip),
         .ID_allowin     (ID_allowin),
-        .inst_sram_addr_ok     (inst_sram_addr_ok),
-        .inst_sram_data_ok     (inst_sram_data_ok),
-        .inst_sram_en   (inst_sram_req),
+        .icache_addr_ok (icache_addr_ok),
+        .icache_data_ok (icache_data_ok),
+        .pc_cacheable   (pc_cacheable),
+        .inst_req       (inst_req),
         .flush          (flush),
         .flush_target   (flush_target),
         .IF_to_ID       (IF_to_ID),
@@ -468,6 +494,7 @@ EX u_EX (
         .invtlb_op      (invtlb_op),
 
         .addr_trans     (addr_trans),
+        .addr_cacheable (addr_cacheable),
         .except_tlbr    (except_tlbr_mem),
         .except_pil     (except_pil),
         .except_pis     (except_pis),
@@ -488,17 +515,17 @@ MEM u_MEM (
         .clk            (clk),
         .rst            (reset),
         .EX_to_MEM_zip  (EX_to_MEM_zip),
-        .write_en       (data_sram_req),
-        .write_we       (data_sram_wstrb),
-        .write_size     (data_sram_size),
-        .write_addr     (data_sram_addr),
-        .write_data     (data_sram_wdata),
+        .write_en       (data_req),
+        .write_we       (data_wstrb),
+        .write_addr     (data_waddr),
+        .write_data     (data_wdata),
+        .cacheable      (dcache_cacheable),
         .MEM_to_WB_zip  (MEM_to_WB_zip),
-        .read_data      (data_sram_rdata),
+        .read_data      (data_rdata),
         .MEM_allowin    (MEM_allowin),
         .WB_allowin     (WB_allowin),
-        .data_sram_addr_ok     (data_sram_addr_ok),
-        .data_sram_data_ok     (data_sram_data_ok),
+        .dcache_addr_ok     (dcache_addr_ok),
+        .dcache_data_ok     (dcache_data_ok),
         .front_valid    (MEM_front_valid),
         .front_addr     (MEM_front_addr),
         .front_data     (MEM_front_data),
@@ -651,8 +678,10 @@ csr u_csr (
 mmu u_inst_mmu (
         .mem_we         (1'b0),
         .mmu_en         (1'b1),
+        .is_if          (1'b1),
         .vaddr          (pc_next),
         .paddr          (pc_trans),
+        .cacheable      (pc_cacheable),
         .s_vppn         (s0_vppn),
         .s_va_bit12     (s0_va_bit12),
         .s_asid         (s0_asid),
@@ -682,8 +711,10 @@ mmu u_inst_mmu (
 mmu u_data_mmu (
         .mem_we         (mem_we),
         .mmu_en         (mmu_en),
+        .is_if          (1'b0),
         .vaddr          (ex_vaddr),
         .paddr          (addr_trans),
+        .cacheable      (addr_cacheable),
         .s_vppn         (s1_vppn),
         .s_va_bit12     (s1_va_bit12),
         .s_asid         (),
@@ -773,20 +804,21 @@ tlb u_tlb (
         .r_v1           (r_v1)   
 );
 
+// I-Cache instance
 cache u_I_Cache (
         .clk    (clk),
         .resetn (reset),
-        .valid  (),
-        .op     (),
-        .cacheable      (),
-        .index  (),
-        .tag    (),
-        .offset (),
-        .wstrb  (),
-        .wdata  (),
-        .addr_ok        (),
-        .data_ok        (),
-        .rdata  (),
+        .valid  (icache_valid),
+        .op     (icache_op),
+        .cacheable      (icache_cacheable),
+        .index  (icache_index),
+        .tag    (icache_tag),
+        .offset (icache_offset),
+        .wstrb  (4'b0),
+        .wdata  (32'b0),
+        .addr_ok        (icache_addr_ok),
+        .data_ok        (icache_data_ok),
+        .rdata  (icache_rdata),
         .rd_req (icache_rd_req),
         .rd_type        (icache_rd_type),
         .rd_addr        (icache_rd_addr),
@@ -794,28 +826,29 @@ cache u_I_Cache (
         .ret_valid      (icache_ret_valid),
         .ret_last       (icache_ret_last),
         .ret_data       (icache_ret_data),
-        .wr_req (),
-        .wr_type        (),
-        .wr_addr        (),
-        .wr_wstrb       (),
-        .wr_data        (),
-        .wr_rdy ()
+        .wr_req (1'b0),
+        .wr_type        (3'b0),
+        .wr_addr        (32'b0),
+        .wr_wstrb       (4'b0),
+        .wr_data        (128'b0),
+        .wr_rdy (1'b0)
 );
 
+// D-Cache instance
 cache u_D_Cache (
         .clk    (clk),
         .resetn (reset),
-        .valid  (),
-        .op     (),
-        .cacheable      (),
-        .index  (),
-        .tag    (),
-        .offset (),
-        .wstrb  (),
-        .wdata  (),
-        .addr_ok        (),
-        .data_ok        (),
-        .rdata  (),
+        .valid  (dcache_valid),
+        .op     (dcache_op),
+        .cacheable      (dcache_cacheable),
+        .index  (dcache_index),
+        .tag    (dcache_tag),
+        .offset (dcache_offset),
+        .wstrb  (dcache_wstrb),
+        .wdata  (dcache_wdata),
+        .addr_ok        (dcache_addr_ok),
+        .data_ok        (dcache_data_ok),
+        .rdata  (dcache_rdata),
         .rd_req (dcache_rd_req),
         .rd_type        (dcache_rd_type),
         .rd_addr        (dcache_rd_addr),

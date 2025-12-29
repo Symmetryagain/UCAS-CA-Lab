@@ -3,7 +3,7 @@ module cache (
         input   wire            resetn,
         // interface to CPU
         input   wire            valid,
-        input   wire            op, //0读1写
+        input   wire            op, // 0: read, 1: write
         input   wire            cacheable,
         input   wire [  7:0]    index,
         input   wire [ 19:0]    tag,
@@ -54,6 +54,7 @@ reg [19:0] reg_tag;
 reg [ 3:0] reg_offset;
 reg [ 3:0] reg_wstrb;
 reg [31:0] reg_wdata;
+reg        reg_cacheable;
 
 reg  [255:0] dirty [1:0];
 wire   replace_dirty;
@@ -97,7 +98,7 @@ always @(*) begin
                         next_state = IDLE;
                 end
                 LOOKUP: begin
-                if (!cache_hit) 
+                if (!cache_hit || !reg_cacheable) 
                         next_state = MISS;
                 // 流水线处理：如果命中，且新请求有效并无冲突，继续保持 LOOKUP 处理新请求
                 else if (valid && !need_pause) 
@@ -106,7 +107,9 @@ always @(*) begin
                         next_state = IDLE;
                 end
                 MISS: begin
-                if (wr_rdy) 
+                if (~reg_cacheable && reg_op && wr_rdy) 
+                        next_state = IDLE;
+                else if (wr_rdy || (~reg_cacheable && ~reg_op) || (reg_cacheable && !replace_dirty)) 
                         next_state = REPLACE;
                 else                                
                         next_state = MISS;
@@ -172,10 +175,12 @@ always @(posedge clk) begin
         if (~resetn) begin
                 reg_op <= 1'b0; reg_index <= 8'b0; reg_tag <= 20'b0;
                 reg_offset <= 4'b0; reg_wstrb <= 4'b0; reg_wdata <= 32'b0;
+                reg_cacheable <= 1'b0;
         end
         else if (check || keep_check) begin
                 reg_op <= op; reg_index <= index; reg_tag <= tag;
                 reg_offset <= offset; reg_wstrb <= wstrb; reg_wdata <= wdata;
+                reg_cacheable <= cacheable;
         end
 end
 
@@ -221,8 +226,8 @@ wire [20:0] tagv_w1_rdata;
 
 assign {way0_tag, way0_v} = tagv_w0_rdata;
 assign {way1_tag, way1_v} = tagv_w1_rdata;
-assign way0_hit = way0_v && (way0_tag == reg_tag);
-assign way1_hit = way1_v && (way1_tag == reg_tag);
+assign way0_hit = way0_v && (way0_tag == reg_tag) && reg_cacheable;
+assign way1_hit = way1_v && (way1_tag == reg_tag) && reg_cacheable;
 assign cache_hit = way0_hit || way1_hit;
 wire [20:0] tagv_wdata;
 wire [ 7:0] tagv_addr;
@@ -324,13 +329,13 @@ end
 assign replace_way = random_way;
 
 assign tagv_wdata = {reg_tag, 1'b1}; // 替换时将新数据写入tagv
-assign tagv_addr  = {8{check}} & index |              
-                {8 {replace_write}} & reg_index;
+assign tagv_addr  = {8{check        }} & index    |              
+                    {8{replace_write}} & reg_index;
 
 assign tagv_w0_en = check || (replace_write && (replace_way == 1'b0));
 assign tagv_w1_en = check || (replace_write && (replace_way == 1'b1));
-assign tagv_w0_we = replace_write && (replace_way == 1'b0) && (refill_counter == reg_offset[3:2]);
-assign tagv_w1_we = replace_write && (replace_way == 1'b1) && (refill_counter == reg_offset[3:2]);
+assign tagv_w0_we = replace_write && (replace_way == 1'b0) && (refill_counter == reg_offset[3:2]) && reg_cacheable;
+assign tagv_w1_we = replace_write && (replace_way == 1'b1) && (refill_counter == reg_offset[3:2]) && reg_cacheable;
 
 
 wire [127:0] way0_data, way1_data, replace_data;
@@ -343,8 +348,8 @@ assign way0_load_word = way0_data[reg_offset[3:2]*32 +: 32];
 assign way1_load_word = way1_data[reg_offset[3:2]*32 +: 32];
 
 assign load_res = {32{way0_hit}} & way0_load_word |
-                {32{way1_hit}} & way1_load_word |
-                {32{replace_write}} & ret_data;// 替换回写进cache
+                  {32{way1_hit}} & way1_load_word |
+                  {32{replace_write}} & ret_data;// 替换回写进cache
 
 // dirty 表
 always @(posedge clk) begin
@@ -360,21 +365,21 @@ always @(posedge clk) begin
         end
 end
 assign replace_dirty = (replace_way == 1'b0) && dirty[0][reg_index] && way0_v 
-                || (replace_way == 1'b1) && dirty[1][reg_index] && way1_v;
+                    || (replace_way == 1'b1) && dirty[1][reg_index] && way1_v;
 assign replace_data = replace_way? way1_data : way0_data;
 
 wire [31:0] refill_data;
 wire [31:0] rewrite_data;
 
 assign rewrite_data = {{reg_wstrb[3]? reg_wdata[31:24] : ret_data[31:24]},
-                {reg_wstrb[2]? reg_wdata[23:16] : ret_data[23:16]},
-                {reg_wstrb[1]? reg_wdata[15: 8] : ret_data[15: 8]},
-                {reg_wstrb[0]? reg_wdata[ 7: 0] : ret_data[ 7: 0]}};
+                       {reg_wstrb[2]? reg_wdata[23:16] : ret_data[23:16]},
+                       {reg_wstrb[1]? reg_wdata[15: 8] : ret_data[15: 8]},
+                       {reg_wstrb[0]? reg_wdata[ 7: 0] : ret_data[ 7: 0]}};
 // 写缺失时,要写的数据为内存旧数据叠加输入新数据，不能直接靠wstrb解决，因为wstrb为0就不再写入
 assign refill_data = ((refill_counter == reg_offset[3:2]) && reg_op)? rewrite_data : //写缺失写回混合数据
                                                                                 ret_data; //读缺失写回内存旧数据
-assign data_wdata = replace_write   ? refill_data :
-                hitwrite ? hitwrite_data  : 32'b0;
+assign data_wdata = replace_write? refill_data :
+                    hitwrite? hitwrite_data : 32'b0;
 
 assign data_addr  = (replace_write) ? reg_index   :
                 (hitwrite           ? hitwrite_index ://hitwrite后存的数据，可能已被更新，不能直接使用寄存
@@ -424,34 +429,37 @@ assign data_w1_b3_we = {4{hitwrite && (hitwrite_way == 1'b1) && (hitwrite_bank =
 
 
 assign addr_ok = (current_state == IDLE) ||
-                (current_state == LOOKUP) && cache_hit &&
-                valid && ~need_pause;
+                 (current_state == LOOKUP) && cache_hit && valid && ~need_pause;
 assign data_ok = (current_state == LOOKUP) && cache_hit || 
-                (current_state == LOOKUP) && reg_op ||
-                (current_state == REFILL) && ret_valid && (refill_counter == reg_offset[3:2]) && ~reg_op;
+                 (current_state == LOOKUP) && reg_op    ||
+                 (current_state == REFILL) && ret_valid && (reg_cacheable && (refill_counter == reg_offset[3:2]) || ~reg_cacheable) && ~reg_op;
 assign rdata   = load_res;
 
 // AXI 
-assign rd_req = (current_state == REPLACE);
-assign rd_type = 3'b100;
-assign rd_addr = {reg_tag, reg_index, 4'b0000};
+assign rd_req = (current_state == REPLACE) && (reg_cacheable || ~reg_op);
+assign rd_type = reg_cacheable? 3'b100 : 3'b010;
+assign rd_addr = reg_cacheable? {reg_tag, reg_index, 4'b0000} : 
+                            {reg_tag, reg_index, reg_offset};
 
-reg reg_wr_req;
-always @(posedge clk) begin
-        if (!resetn) begin
-                reg_wr_req <= 1'b0;
-        end
-        else if (current_state == MISS && next_state == REPLACE) begin
-                reg_wr_req <= 1'b1;
-        end
-        else if (wr_rdy) begin
-                reg_wr_req <= 1'b0;
-        end
-end
-assign wr_req = reg_wr_req && replace_dirty;
-assign wr_type = 3'b100;
-assign wr_addr = {32{replace_way == 1'b0}} & {way0_tag, reg_index, 4'b0000} |
-                {32{replace_way == 1'b1}} & {way1_tag, reg_index, 4'b0000};
-assign wr_wstrb = 4'b1111;
-assign wr_data = replace_data;
+// reg reg_wr_req;
+// always @(posedge clk) begin
+//         if (!resetn) begin
+//                 reg_wr_req <= 1'b0;
+//         end
+//         else if (current_state == MISS && next_state == REPLACE) begin
+//                 reg_wr_req <= 1'b1;
+//         end
+//         else if (wr_rdy) begin
+//                 reg_wr_req <= 1'b0;
+//         end
+// end
+
+assign wr_req = (current_state == MISS) && (replace_dirty || (~reg_cacheable && reg_op));
+assign wr_type = reg_cacheable? 3'b100 : 3'b010;
+assign wr_addr = ~reg_cacheable? {reg_tag, reg_index, reg_offset} :
+                 replace_way? {way1_tag, reg_index, 4'b0000} :
+                              {way0_tag, reg_index, 4'b0000};
+assign wr_wstrb = reg_cacheable? 4'b1111 : reg_wstrb;
+assign wr_data = reg_cacheable? replace_data : {96'b0, reg_wdata};
+
 endmodule
