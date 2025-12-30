@@ -85,8 +85,9 @@ assign rdata_req = dcache_rd_req;
 assign wdata_req = dcache_wr_req;
 
 // 状态机常量定义
-localparam  ar_wait         = 2'b01,
-            ar_req          = 2'b10,
+localparam  ar_init         = 3'b001,
+            ar_wait         = 3'b010,
+            ar_req          = 3'b100,
 
             r_wait          = 4'b0001,
             r_start         = 4'b0010,  
@@ -102,8 +103,8 @@ localparam  ar_wait         = 2'b01,
             b_wait          = 2'b01,
             b_done          = 2'b10;
 
-reg [1:0] ar_cur_state;
-reg [1:0] ar_next_state;
+reg [2:0] ar_cur_state;
+reg [2:0] ar_next_state;
 
 reg [3:0] r_cur_state;
 reg [3:0] r_next_state;
@@ -155,29 +156,37 @@ end
 // 读请求状态机 
 always @(posedge aclk) begin
     if(reset)
-        ar_cur_state <= ar_wait;
+        ar_cur_state <= ar_init;
     else
         ar_cur_state <= ar_next_state;
 end
 
 always @(*) begin
     case(ar_cur_state)
-        ar_wait: begin
-            if(reset | need_wait)
-                ar_next_state = ar_wait;
-            else if(rinst_req | rdata_req)
+        ar_init: begin
+            if(reset)
+                ar_next_state = ar_init;
+            else if(rdata_req)
+                ar_next_state = ar_wait;   
+            else if(rinst_req)
                 ar_next_state = ar_req;
             else
+                ar_next_state = ar_init;
+        end
+        ar_wait: begin 
+            if(need_wait)
                 ar_next_state = ar_wait;
+            else
+                ar_next_state = ar_req;
         end
         ar_req: begin
             if(arvalid & arready)
-                ar_next_state = ar_wait;
+                ar_next_state = ar_init;
             else
                 ar_next_state = ar_req;
         end
         default:
-            ar_next_state = ar_wait;
+            ar_next_state = ar_init;
     endcase
 end
 
@@ -237,7 +246,7 @@ end
 always @(*) begin
     case(w_cur_state)
         w_wait: begin
-            if(wdata_req)
+            if(dcache_wr_rdy & wdata_req)
                 w_next_state = w_wait_aw_w;
             else
                 w_next_state = w_wait;
@@ -318,7 +327,7 @@ end
 
 
 // AXI 控制信号
-assign arvalid = ar_cur_state[1];
+assign arvalid = ar_cur_state[2];
 assign rready  = r_cur_state[1] | r_cur_state[2];  // r_start 或 r_reading
 
 assign awvalid = w_cur_state[1] | w_cur_state[3];
@@ -412,7 +421,7 @@ end
 always @(posedge aclk) begin
     if(reset)
         wdata_index <= 2'b0;
-    else if(w_cur_state[0])
+    else if(w_cur_state[0] & ~wdata_req | w_cur_state[4] & bvalid & bready)
         wdata_index <= 2'b0;
     else if(wvalid & wready)
         wdata_index <= wdata_index + 2'b1;
@@ -425,12 +434,12 @@ always @(posedge aclk) begin
         wdata <= 32'b0;
     end
     else if(w_cur_state[0] | (wvalid & wready)) begin
-        wstrb <= dcache_wr_wstrb_r;
+        wstrb <= dcache_wr_wstrb;
         case(wdata_index)
-            2'b00: wdata <= dcache_wr_data_r[31:0];
-            2'b01: wdata <= dcache_wr_data_r[63:32];
-            2'b10: wdata <= dcache_wr_data_r[95:64];
-            2'b11: wdata <= dcache_wr_data_r[127:96];
+            2'b00: wdata <= dcache_wr_data[31:0];
+            2'b01: wdata <= dcache_wr_data[63:32];
+            2'b10: wdata <= dcache_wr_data[95:64];
+            2'b11: wdata <= dcache_wr_data[127:96];
         endcase
     end
 end
@@ -448,18 +457,18 @@ end
 
 
 // ICache 读接口
-assign icache_rd_rdy     = ar_cur_state[0] & ~rdata_req;
+assign icache_rd_rdy     = ar_cur_state[0] & ~need_wait & ~rdata_req;
 assign icache_ret_data   = rdata_buffer[0];
 assign icache_ret_valid  = ~rid_reg[0] & (|r_cur_state[3:2]);
 assign icache_ret_last   = ~rid_reg[0] & r_cur_state[3];
 
 // DCache 读接口
-assign dcache_rd_rdy     = ar_cur_state[0] & rdata_req;
+assign dcache_rd_rdy     = ar_cur_state[0] & ~need_wait & rdata_req;
 assign dcache_ret_data   = rdata_buffer[1];
 assign dcache_ret_valid  = rid_reg[0] & (|r_cur_state[3:2]);
 assign dcache_ret_last   = rid_reg[0] & r_cur_state[3];
 
 // DCache 写接口
-assign dcache_wr_rdy     = b_cur_state[0];
+assign dcache_wr_rdy     = w_cur_state[0] & b_cur_state[0];
 
 endmodule
