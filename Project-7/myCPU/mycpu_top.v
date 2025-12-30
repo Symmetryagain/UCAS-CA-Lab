@@ -319,12 +319,14 @@ assign {
 } = pc_paddr;
 
 assign dcache_valid     = data_req;
-assign dcache_op        = mem_we;
+assign dcache_op        = |data_wstrb;
 assign {
         dcache_tag,
         dcache_index,
         dcache_offset
 } = data_waddr;
+assign dcache_wstrb     = data_wstrb;
+assign dcache_wdata     = data_wdata;
 assign data_rdata       = dcache_rdata;
 
 // inst_retire_reg format: { pc(32), {4{rf_wen}}(4), rf_waddr(5), rf_wdata(32) }
@@ -807,7 +809,7 @@ tlb u_tlb (
 // I-Cache instance
 cache u_I_Cache (
         .clk    (clk),
-        .resetn (reset),
+        .resetn (~reset),
         .valid  (icache_valid),
         .op     (icache_op),
         .cacheable      (icache_cacheable),
@@ -826,18 +828,18 @@ cache u_I_Cache (
         .ret_valid      (icache_ret_valid),
         .ret_last       (icache_ret_last),
         .ret_data       (icache_ret_data),
-        .wr_req (1'b0),
-        .wr_type        (3'b0),
-        .wr_addr        (32'b0),
-        .wr_wstrb       (4'b0),
-        .wr_data        (128'b0),
+        .wr_req (),
+        .wr_type        (),
+        .wr_addr        (),
+        .wr_wstrb       (),
+        .wr_data        (),
         .wr_rdy (1'b0)
 );
 
 // D-Cache instance
 cache u_D_Cache (
         .clk    (clk),
-        .resetn (reset),
+        .resetn (~reset),
         .valid  (dcache_valid),
         .op     (dcache_op),
         .cacheable      (dcache_cacheable),

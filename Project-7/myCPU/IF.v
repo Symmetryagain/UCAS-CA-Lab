@@ -157,7 +157,7 @@ always @(posedge clk) begin
         if (rst) begin
                 lock_data <= 1'b0;
         end
-        else if (wait_addr_ok & g_flush & ~icache_addr_ok | lock_addr & icache_addr_ok | wait_data_ok & g_flush & ~icache_data_ok) begin
+        else if (wait_addr_ok & g_flush & icache_addr_ok | lock_addr & icache_addr_ok | wait_data_ok & g_flush & ~icache_data_ok) begin
                 lock_data <= 1'b1;
         end
         else if (lock_data & icache_data_ok) begin 

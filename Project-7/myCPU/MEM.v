@@ -127,6 +127,19 @@ wire            csr_we;
 wire [31:0]     csr_wmask;
 wire [31:0]     csr_wvalue;
 
+reg  [31:0]     rf_wdata_LOAD_reg;
+always @(posedge clk) begin
+        if (rst) begin
+                rf_wdata_LOAD_reg <= 32'b0;
+        end
+        else if (wait_data_ok & dcache_data_ok) begin
+                rf_wdata_LOAD_reg <= rf_wdata_LOAD;
+        end
+        else begin
+                rf_wdata_LOAD_reg <= rf_wdata_LOAD_reg;
+        end
+end
+
 assign front_valid = valid & gr_we;
 assign front_addr = rf_waddr;
 assign front_data = rf_wdata;
@@ -233,7 +246,7 @@ assign rf_wdata_LOAD    = inst_ld_b?  rf_wdata_ld_b :
                           inst_ld_hu? rf_wdata_ld_hu:
                           read_data;
 
-assign rf_wdata         = res_from_mem ? rf_wdata_LOAD : alu_result;
+assign rf_wdata         = res_from_mem ? rf_wdata_LOAD_reg : alu_result;
 
 assign write_en         = wait_addr_ok;
 

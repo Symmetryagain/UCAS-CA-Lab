@@ -98,7 +98,7 @@ always @(*) begin
                         next_state = IDLE;
                 end
                 LOOKUP: begin
-                if (!cache_hit || !reg_cacheable) 
+                if (~cache_hit || ~reg_cacheable) 
                         next_state = MISS;
                 // 流水线处理：如果命中，且新请求有效并无冲突，继续保持 LOOKUP 处理新请求
                 else if (valid && !need_pause) 

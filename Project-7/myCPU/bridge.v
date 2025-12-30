@@ -32,7 +32,7 @@ module bridge(
         output  reg  [  3:0]    arid,
         output  reg  [ 31:0]    araddr,
         output  reg  [  7:0]    arlen,
-        output  reg  [  2:0]    arsize,    
+        output  wire [  2:0]    arsize,    
         output  wire [  1:0]    arburst,
         output  wire [  1:0]    arlock,
         output  wire [  3:0]    arcache,
@@ -144,11 +144,11 @@ end
 always @(posedge aclk) begin
     if(reset)
         r_cnt <= 2'b0;
-    else if(arvalid & arready & rvalid & rready)
+    else if(arvalid & arready & rvalid & rready & rlast)
         r_cnt <= r_cnt;
     else if(arvalid & arready)
         r_cnt <= r_cnt + 2'b1;
-    else if(rvalid & rready)
+    else if(rvalid & rready & rlast)
         r_cnt <= r_cnt - 2'b1;
 end
 
@@ -343,14 +343,16 @@ always @(posedge aclk) begin
     end
 end
 
-always @(posedge aclk) begin
-    if(reset) begin
-        arsize <= 3'b0;
-    end
-    else if(ar_cur_state[0]) begin
-        arsize <= rdata_req ? {1'b0, dcache_rd_type[1:0]} : {1'b0, icache_rd_type[1:0]};
-    end
-end
+assign arsize = 3'b010;
+
+// always @(posedge aclk) begin
+//     if(reset) begin
+//         arsize <= 3'b010;
+//     end
+//     else if(ar_cur_state[0]) begin
+//         arsize <= rdata_req ? {1'b0, dcache_rd_type[1:0]} : {1'b0, icache_rd_type[1:0]};
+//     end
+// end
 
 always @(posedge aclk) begin
     if(reset) begin
@@ -434,7 +436,7 @@ always @(posedge aclk) begin
 end
 
 assign wid   = 4'b0001;
-assign wlast = &wdata_index;
+assign wlast = dcache_rd_type[2]? &wdata_index : ~|wdata_index;
 
 
 always @(posedge aclk) begin
