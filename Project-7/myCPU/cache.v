@@ -10,6 +10,10 @@ module cache (
         input   wire [  3:0]    offset,
         input   wire [  3:0]    wstrb,
         input   wire [ 31:0]    wdata,
+        input   wire            cacop_en,
+        input   wire [  4:0]    cacop_code,
+        input   wire  [31:0]    cacop_addr,
+        output  wire            cacop_ok,
         output  wire            addr_ok,
         output  wire            data_ok,
         output  wire [ 31:0]    rdata,
@@ -55,6 +59,9 @@ reg [ 3:0] reg_offset;
 reg [ 3:0] reg_wstrb;
 reg [31:0] reg_wdata;
 reg        reg_cacheable;
+reg        reg_cacop_en;
+reg [4:0]  reg_cacop_code;
+reg [31:0] reg_cacop_addr;
 
 reg  [255:0] dirty [1:0];
 wire   replace_dirty;
@@ -80,6 +87,15 @@ wire [ 3:0] data_w0_b0_we, data_w0_b1_we,
         data_w1_b0_we, data_w1_b1_we, 
         data_w1_b2_we, data_w1_b3_we;
 
+wire    cacop_store_tag;
+wire    cacop_index_invalidate;
+wire    cacop_hit_invalidate;
+
+assign cacop_store_tag        = (reg_cacop_code[4:3] == 2'b00);
+assign cacop_index_invalidate = (reg_cacop_code[4:3] == 2'b01);
+assign cacop_hit_invalidate   = (reg_cacop_code[4:3] == 2'b10);
+
+
 // 主状态机
 always @(posedge clk) begin
 if (~resetn) 
@@ -92,24 +108,24 @@ always @(*) begin
         case (current_state)
                 IDLE: begin
                 // 如果没有检测到冲突，且请求有效，进入 LOOKUP
-                if (valid && !need_pause) 
+                if (valid && ~need_pause || cacop_en) 
                         next_state = LOOKUP;
                 else                            
                         next_state = IDLE;
                 end
                 LOOKUP: begin
-                if (~cache_hit || ~reg_cacheable) 
+                if (~cache_hit || ~reg_cacheable || reg_cacop_en && cacop_index_invalidate || reg_cacop_en && cacop_hit_invalidate && cache_hit) 
                         next_state = MISS;
                 // 流水线处理：如果命中，且新请求有效并无冲突，继续保持 LOOKUP 处理新请求
-                else if (valid && !need_pause) 
+                else if (valid && ~need_pause) 
                         next_state = LOOKUP;
-                else 
+                else //reg_cacop_en && cacop_store_tag || reg_cacop_en && cacop_hit_invalidate && ~cache_hit
                         next_state = IDLE;
                 end
                 MISS: begin
                 if (~reg_cacheable && reg_op && wr_rdy) 
                         next_state = IDLE;
-                else if (wr_rdy || (~reg_cacheable && ~reg_op) || (reg_cacheable && !replace_dirty)) 
+                else if (wr_rdy || (~reg_cacheable && ~reg_op) || (reg_cacheable && ~replace_dirty) || reg_cacop_en) 
                         next_state = REPLACE;
                 else                                
                         next_state = MISS;
@@ -173,14 +189,31 @@ assign need_pause = valid && !op &&
 
 always @(posedge clk) begin
         if (~resetn) begin
-                reg_op <= 1'b0; reg_index <= 8'b0; reg_tag <= 20'b0;
-                reg_offset <= 4'b0; reg_wstrb <= 4'b0; reg_wdata <= 32'b0;
+                reg_op <= 1'b0; 
+                reg_index <= 8'b0; 
+                reg_tag <= 20'b0;
+                reg_offset <= 4'b0; 
+                reg_wstrb <= 4'b0; 
+                reg_wdata <= 32'b0;
                 reg_cacheable <= 1'b0;
+                reg_cacop_en <= 1'b0;
+                reg_cacop_code <= 5'b0;
+                reg_cacop_addr <= 32'b0;
         end
-        else if (check || keep_check) begin
-                reg_op <= op; reg_index <= index; reg_tag <= tag;
-                reg_offset <= offset; reg_wstrb <= wstrb; reg_wdata <= wdata;
+        else if (check || keep_check || cacop_en) begin
+                reg_op <= op; 
+                reg_index <= index; 
+                reg_tag <= tag;
+                reg_offset <= offset; 
+                reg_wstrb <= wstrb; 
+                reg_wdata <= wdata;
                 reg_cacheable <= cacheable;
+                reg_cacop_en <= cacop_en;
+                reg_cacop_code <= cacop_code;
+                reg_cacop_addr <= cacop_addr;
+        end
+        else if(current_state==IDLE && ~cacop_en)begin
+                reg_cacop_en <= 1'b0;
         end
 end
 

@@ -21,7 +21,7 @@ module ID(
         input   wire            has_int,
         // ID -> EX
         output  wire            ID_to_EX,
-        output  wire [283:0]    ID_to_EX_zip,
+        output  wire [284:0]    ID_to_EX_zip,
         output  wire [  8:0]    ID_except_zip,
         // EX -> ID
         input   wire            EX_allowin,
@@ -42,7 +42,7 @@ module ID(
 assign ID_to_EX = readygo & EX_allowin;
 
 wire      is_csr;
-assign is_csr = inst_csrwr | inst_csrxchg | inst_rdcntid | inst_tlbrd | inst_tlbsrch;
+assign is_csr = inst_csrrd | inst_csrwr | inst_csrxchg | inst_rdcntid | inst_tlbrd | inst_tlbsrch;
 
 reg             at_state;
 always @(posedge clk) begin
@@ -211,6 +211,7 @@ wire            inst_tlbrd;
 wire            inst_tlbwr;
 wire            inst_tlbfill;
 wire            inst_invtlb;
+wire            inst_cacop;
 
 wire            need_ui5;
 wire            need_ui12;
@@ -305,10 +306,11 @@ assign  inst_tlbrd      = op_31_26_d[6'h01] & op_25_22_d[4'h9] & op_21_20_d[2'h0
 assign  inst_tlbwr      = op_31_26_d[6'h01] & op_25_22_d[4'h9] & op_21_20_d[2'h0] & op_19_15_d[5'h10] & (rk == 5'h0c) & (rj == 5'h00) & (rd == 5'h00);
 assign  inst_tlbfill    = op_31_26_d[6'h01] & op_25_22_d[4'h9] & op_21_20_d[2'h0] & op_19_15_d[5'h10] & (rk == 5'h0d) & (rj == 5'h00) & (rd == 5'h00);
 assign  inst_invtlb     = op_31_26_d[6'h01] & op_25_22_d[4'h9] & op_21_20_d[2'h0] & op_19_15_d[5'h13];
+assign  inst_cacop      = op_31_26_d[6'h01] & op_25_22_d[4'h8];
 
 assign  alu_op[ 0]      = inst_add_w | inst_addi_w | inst_ld_w | inst_st_w
                         | inst_ld_b | inst_ld_bu | inst_ld_h | inst_ld_hu | inst_st_b | inst_st_h
-                        | inst_jirl | inst_bl | inst_pcaddu12i;
+                        | inst_jirl | inst_bl | inst_pcaddu12i | inst_cacop;
 assign  alu_op[ 1]      = inst_sub_w;
 assign  alu_op[ 2]      = inst_slt | inst_slti;
 assign  alu_op[ 3]      = inst_sltu | inst_sltui;
@@ -325,7 +327,7 @@ assign  need_ui5        =  inst_slli_w | inst_srli_w | inst_srai_w;
 assign  need_ui12       =  inst_andi | inst_ori | inst_xori;
 assign  need_si12       =  inst_addi_w | inst_ld_w | inst_st_w 
                          | inst_ld_b | inst_ld_bu |inst_ld_h | inst_ld_hu | inst_st_b | inst_st_h
-                         | inst_slti | inst_sltui;
+                         | inst_slti | inst_sltui | inst_cacop;
 assign  need_si16       =  inst_jirl | inst_beq | inst_bne;
 assign  need_si20       =  inst_lu12i_w | inst_pcaddu12i;
 assign  need_si26       =  inst_b | inst_bl;
@@ -367,14 +369,15 @@ assign  src2_is_imm     = inst_slli_w   |
                           inst_andi     |
                           inst_ori      |
                           inst_xori     |
-                          inst_pcaddu12i;
+                          inst_pcaddu12i|
+                          inst_cacop;
 
 assign  res_from_mem    = inst_ld_w | inst_ld_b | inst_ld_bu | inst_ld_h | inst_ld_hu;
 assign  dst_is_r1       = inst_bl;
 assign  gr_we           = ~inst_st_w & ~inst_st_b & ~inst_st_h &
                           ~inst_beq & ~inst_bne & ~inst_b & ~inst_blt & ~inst_bge & ~inst_bltu & ~inst_bgeu &
                           ~inst_ertn &
-                          ~inst_tlbsrch & ~inst_tlbrd & ~inst_tlbwr & ~inst_tlbfill & ~inst_invtlb;
+                          ~inst_tlbsrch & ~inst_tlbrd & ~inst_tlbwr & ~inst_tlbfill & ~inst_invtlb & ~inst_cacop;
 assign  mem_we          = inst_st_w | inst_st_b | inst_st_h;
 assign  dest            = dst_is_r1 ? 5'd1 : inst_rdcntid ? rj : rd;
 
@@ -423,7 +426,7 @@ assign except_ine  = ~( inst_add_w   | inst_sub_w  | inst_slt     | inst_sltu   
                         inst_mulhu   | inst_div    | inst_mod     | inst_divu    | inst_modu    | inst_blt       | inst_bge     | inst_bltu    |
                         inst_bgeu    | inst_ld_b   | inst_ld_h    | inst_ld_bu   | inst_ld_hu   | inst_st_b      | inst_st_h    |
                         inst_csrrd   | inst_csrwr  | inst_csrxchg | inst_ertn    | inst_syscall | inst_break     | inst_rdcntid | inst_rdcntvl | inst_rdcntvh |
-                        inst_tlbsrch | inst_tlbrd  | inst_tlbwr   | inst_tlbfill | inst_invtlb & ~(|rd[4:3]) & (rd[2:0] != 3'b111)
+                        inst_tlbsrch | inst_tlbrd  | inst_tlbwr   | inst_tlbfill | inst_invtlb & ~(|rd[4:3]) & (rd[2:0] != 3'b111) | inst_cacop
                         ) & valid;
 assign except_int  = has_int;
 
@@ -436,7 +439,7 @@ assign ID_to_EX_zip = {
         mem_we, res_from_mem, gr_we, rkd_value, dest,
         inst_mul, inst_mulh, inst_mulhu, inst_div, inst_mod, inst_divu, inst_modu, 
         inst_rdcntvh, inst_rdcntvl, is_csr,
-        inst_tlbsrch, inst_tlbrd, inst_tlbwr, inst_tlbfill, inst_invtlb,
+        inst_tlbsrch, inst_tlbrd, inst_tlbwr, inst_tlbfill, inst_invtlb, inst_cacop,
         csr_re, csr_we, csr_wmask, csr_wvalue, csr_num
 };
 

@@ -143,7 +143,7 @@ wire            WB_allowin;
 
 // internal pipeline zipes
 wire [ 65:0]    IF_to_ID_zip;
-wire [283:0]    ID_to_EX_zip;
+wire [284:0]    ID_to_EX_zip;
 wire [263:0]    EX_to_MEM_zip;
 wire [186:0]    MEM_to_WB_zip;
 
@@ -304,6 +304,11 @@ wire            w_d1;
 wire            w_v1;
 wire            tlb_flush;
 wire [31:0]     tlb_flush_target;
+
+wire            cacop_icache;
+wire            cacop_dcache;
+wire [ 4:0]     cacop_code;
+wire [31:0]     cacop_addr;
 
 assign flush    = ertn_flush | wb_ex | tlb_flush;
 assign flush_target     = ertn_flush? csr_era_pc : 
@@ -509,7 +514,12 @@ EX u_EX (
         .s1_index       (s1_index),
         
         .flush          (flush),
-        .counter        (counter)
+        .counter        (counter),
+
+        .cacop_icache   (cacop_icache),
+        .cacop_dcache   (cacop_dcache),
+        .cacop_code     (cacop_code),
+        .cacop_addr     (cacop_addr)
 );
 
 // MEM instance
@@ -818,6 +828,9 @@ cache u_I_Cache (
         .offset (icache_offset),
         .wstrb  (4'b0),
         .wdata  (32'b0),
+        .cacop_en       (cacop_icache),
+        .cacop_code     (5'b0),
+        .cacop_addr     (cacop_addr),
         .addr_ok        (icache_addr_ok),
         .data_ok        (icache_data_ok),
         .rdata  (icache_rdata),
@@ -848,6 +861,9 @@ cache u_D_Cache (
         .offset (dcache_offset),
         .wstrb  (dcache_wstrb),
         .wdata  (dcache_wdata),
+        .cacop_en       (cacop_dcache),
+        .cacop_code     (cacop_code),
+        .cacop_addr     (cacop_addr),
         .addr_ok        (dcache_addr_ok),
         .data_ok        (dcache_data_ok),
         .rdata  (dcache_rdata),

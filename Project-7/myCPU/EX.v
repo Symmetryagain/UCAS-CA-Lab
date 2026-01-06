@@ -15,7 +15,7 @@ module EX #(
         output  wire            EX_is_load,
         // ID -> EX
         input   wire            ID_to_EX,
-        input   wire [283:0]    ID_to_EX_zip,
+        input   wire [284:0]    ID_to_EX_zip,
         input   wire [  8:0]    ID_except_zip,
         // EX -> MEM
         output  wire            EX_to_MEM,
@@ -49,7 +49,13 @@ module EX #(
         input   wire [ 31:0]    csr_tlbehi_data,
         input   wire [ 31:0]    csr_tlbidx_data,
         /// counter
-        input   wire [ 63:0]    counter
+        input   wire [ 63:0]    counter,
+        
+        // cacop
+        output  wire            cacop_icache,
+        output  wire            cacop_dcache,
+        output  wire [4:0]      cacop_code, 
+        output  wire [31:0]     cacop_addr
 );
 
 wire            valid;
@@ -57,10 +63,10 @@ assign valid = ID_to_EX_valid & at_state & ~flush;
 
 assign EX_to_MEM = readygo & MEM_allowin;
 
-reg  [283:0]    ID_to_EX_reg;
+reg  [284:0]    ID_to_EX_reg;
 always @(posedge clk) begin
         if (rst) begin
-                ID_to_EX_reg <= 284'b0;
+                ID_to_EX_reg <= 285'b0;
         end
         else if (ID_to_EX) begin
                 ID_to_EX_reg <= ID_to_EX_zip;
@@ -140,6 +146,7 @@ wire            inst_tlbrd;
 wire            inst_tlbwr;
 wire            inst_tlbfill;
 wire            inst_invtlb;
+wire            inst_cacop;
 
 wire            csr_re;
 wire [13:0]     csr_num;
@@ -163,7 +170,7 @@ assign  {
         mem_we, res_from_mem, gr_we, rkd_value, rf_waddr,
         inst_mul, inst_mulh, inst_mulhu, inst_div, inst_mod, inst_divu, inst_modu, 
         inst_rdcntvh, inst_rdcntvl, is_csr,
-        inst_tlbsrch, inst_tlbrd, inst_tlbwr, inst_tlbfill, inst_invtlb,
+        inst_tlbsrch, inst_tlbrd, inst_tlbwr, inst_tlbfill, inst_invtlb, inst_cacop,
         csr_re, csr_we, csr_wmask, csr_wvalue, csr_num
 } = ID_to_EX_reg;
 
@@ -365,5 +372,10 @@ assign EX_to_MEM_zip = {
 };
 
 assign EX_except_zip = {ID_except_reg, except_ale, except_tlbr, except_pil, except_pis, except_pme, except_ppi};
+
+assign cacop_code  = rf_waddr;
+assign cacop_icache = (cacop_code[2:0]==3'b000) && inst_cacop && valid;
+assign cacop_dcache = (cacop_code[2:0]==3'b001) && inst_cacop && valid;
+assign cacop_addr   = (cacop_code[4:3]==2'b10)? addr_trans: alu_result;
 
 endmodule
