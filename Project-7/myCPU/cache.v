@@ -381,8 +381,8 @@ assign tagv_wdata = cacop_store_tag ? cacop_store_tag_data :
 assign tagv_addr  = (cacop_store_tag | cacop_index_invalidate | cacop_hit_invalidate) ? reg_cacop_addr[11:4] :
                     {8{check}} & index | {8{replace_write}} & reg_index;
 
-assign tagv_w0_en = check || (replace_write && (replace_way == 1'b0));
-assign tagv_w1_en = check || (replace_write && (replace_way == 1'b1));
+assign tagv_w0_en = check || (replace_write && reg_cacheable && (replace_way == 1'b0));
+assign tagv_w1_en = check || (replace_write && reg_cacheable && (replace_way == 1'b1));
 assign tagv_w0_we = replace_write && (replace_way == 1'b0) && (refill_counter == reg_offset[3:2]) && reg_cacheable;
 assign tagv_w1_we = replace_write && (replace_way == 1'b1) && (refill_counter == reg_offset[3:2]) && reg_cacheable;
 
@@ -436,45 +436,45 @@ assign data_addr  = (replace_write) ? reg_index   :
 
 assign data_w0_b0_en = check  && (offset[3:2] == 2'b00) || //此时读，不写
                 hitwrite && (hitwrite_way == 1'b0) && (hitwrite_bank == 2'b00)  || 
-                replace_write && (replace_way == 1'b0) && (refill_counter == 2'b00);
+                replace_write && reg_cacheable && (replace_way == 1'b0) && (refill_counter == 2'b00);
 assign data_w0_b1_en = check  && (offset[3:2] == 2'b01) ||
                 hitwrite && (hitwrite_way == 1'b0) && (hitwrite_bank == 2'b01)  ||
-                replace_write && (replace_way == 1'b0) && (refill_counter == 2'b01);
+                replace_write && reg_cacheable && (replace_way == 1'b0) && (refill_counter == 2'b01);
 assign data_w0_b2_en = check  && (offset[3:2] == 2'b10) ||
                 hitwrite && (hitwrite_way == 1'b0) && (hitwrite_bank == 2'b10)  ||
-                replace_write && (replace_way == 1'b0) && (refill_counter == 2'b10);
+                replace_write && reg_cacheable && (replace_way == 1'b0) && (refill_counter == 2'b10);
 assign data_w0_b3_en = check  && (offset[3:2] == 2'b11) ||
                 hitwrite && (hitwrite_way == 1'b0) && (hitwrite_bank == 2'b11)  ||
-                replace_write && (replace_way == 1'b0) && (refill_counter == 2'b11);
+                replace_write && reg_cacheable && (replace_way == 1'b0) && (refill_counter == 2'b11);
 assign data_w1_b0_en = check  && (offset[3:2] == 2'b00) ||
                 hitwrite && (hitwrite_way == 1'b1) && (hitwrite_bank == 2'b00)  ||
-                replace_write && (replace_way == 1'b1) && (refill_counter == 2'b00);
+                replace_write && reg_cacheable && (replace_way == 1'b1) && (refill_counter == 2'b00);
 assign data_w1_b1_en = check  && (offset[3:2] == 2'b01) ||
                 hitwrite && (hitwrite_way == 1'b1) && (hitwrite_bank == 2'b01)  ||
-                replace_write && (replace_way == 1'b1) && (refill_counter == 2'b01);
+                replace_write && reg_cacheable && (replace_way == 1'b1) && (refill_counter == 2'b01);
 assign data_w1_b2_en = check  && (offset[3:2] == 2'b10) ||
                 hitwrite && (hitwrite_way == 1'b1) && (hitwrite_bank == 2'b10)  ||
-                replace_write && (replace_way == 1'b1) && (refill_counter == 2'b10);
+                replace_write && reg_cacheable && (replace_way == 1'b1) && (refill_counter == 2'b10);
 assign data_w1_b3_en = check  && (offset[3:2] == 2'b11) ||
                 hitwrite && (hitwrite_way == 1'b1) && (hitwrite_bank == 2'b11)  ||
-                replace_write && (replace_way == 1'b1) && (refill_counter == 2'b11);
+                replace_write && reg_cacheable && (replace_way == 1'b1) && (refill_counter == 2'b11);
 
 assign data_w0_b0_we = {4{hitwrite && (hitwrite_way == 1'b0) && (hitwrite_bank == 2'b00)}} & hitwrite_strb |
-                {4{replace_write&& (replace_way == 1'b0) && (refill_counter == 2'b00)}};
+                {4{replace_write && reg_cacheable && (replace_way == 1'b0) && (refill_counter == 2'b00)}};
 assign data_w0_b1_we = {4{hitwrite && (hitwrite_way == 1'b0) && (hitwrite_bank == 2'b01)}} & hitwrite_strb |
-                {4{replace_write && (replace_way == 1'b0) && (refill_counter == 2'b01)}};
+                {4{replace_write && reg_cacheable && (replace_way == 1'b0) && (refill_counter == 2'b01)}};
 assign data_w0_b2_we = {4{hitwrite && (hitwrite_way == 1'b0) && (hitwrite_bank == 2'b10)}} & hitwrite_strb |
-                {4{replace_write && (replace_way == 1'b0) && (refill_counter == 2'b10) }};
+                {4{replace_write && reg_cacheable && (replace_way == 1'b0) && (refill_counter == 2'b10)}};
 assign data_w0_b3_we = {4{hitwrite && (hitwrite_way == 1'b0) && (hitwrite_bank == 2'b11)}} & hitwrite_strb |
-                {4{replace_write && (replace_way == 1'b0) && (refill_counter == 2'b11)}};
+                {4{replace_write && reg_cacheable && (replace_way == 1'b0) && (refill_counter == 2'b11)}};
 assign data_w1_b0_we = {4{hitwrite && (hitwrite_way == 1'b1) && (hitwrite_bank == 2'b00)}} & hitwrite_strb |
-                {4{replace_write && (replace_way == 1'b1) && (refill_counter == 2'b00)}};
+                {4{replace_write && reg_cacheable && (replace_way == 1'b1) && (refill_counter == 2'b00)}};
 assign data_w1_b1_we = {4{hitwrite && (hitwrite_way == 1'b1) && (hitwrite_bank == 2'b01)}} & hitwrite_strb |
-                {4{replace_write && (replace_way == 1'b1) && (refill_counter == 2'b01)}};
+                {4{replace_write && reg_cacheable && (replace_way == 1'b1) && (refill_counter == 2'b01)}};
 assign data_w1_b2_we = {4{hitwrite && (hitwrite_way == 1'b1) && (hitwrite_bank == 2'b10)}} & hitwrite_strb |
-                {4{replace_write && (replace_way == 1'b1) && (refill_counter == 2'b10)}};
+                {4{replace_write && reg_cacheable && (replace_way == 1'b1) && (refill_counter == 2'b10)}};
 assign data_w1_b3_we = {4{hitwrite && (hitwrite_way == 1'b1) && (hitwrite_bank == 2'b11)}} & hitwrite_strb |
-                {4{replace_write && (replace_way == 1'b1) && (refill_counter == 2'b11)}};
+                {4{replace_write && reg_cacheable && (replace_way == 1'b1) && (refill_counter == 2'b11)}};
 
 
 assign addr_ok = (current_state == IDLE) ||
