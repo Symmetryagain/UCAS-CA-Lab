@@ -545,7 +545,9 @@ assign csr_rvalue =     {32{csr_num == `CSR_CRMD  }} & csr_crmd_data
                       | {32{csr_num == `CSR_TLBELO0}} & csr_tlbelo0_data
                       | {32{csr_num == `CSR_TLBELO1}} & csr_tlbelo1_data
                       | {32{csr_num == `CSR_ASID  }}  & csr_asid_data
-                      | {32{csr_num == `CSR_TLBRENTRY}} & csr_tlbrentry_data;
+                      | {32{csr_num == `CSR_TLBRENTRY}} & csr_tlbrentry_data
+                      | {32{csr_num == `CSR_DMW0  }} & csr_dmw0_data
+                      | {32{csr_num == `CSR_DMW1  }} & csr_dmw1_data;
 
 endmodule
 
