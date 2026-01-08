@@ -87,13 +87,6 @@ wire [ 3:0] data_w0_b0_we, data_w0_b1_we,
         data_w1_b0_we, data_w1_b1_we, 
         data_w1_b2_we, data_w1_b3_we;
 
-wire    cacop_store_tag;
-wire    cacop_index_invalidate;
-wire    cacop_hit_invalidate;
-
-assign cacop_store_tag        = (reg_cacop_code[4:3] == 2'b00);
-assign cacop_index_invalidate = (reg_cacop_code[4:3] == 2'b01);
-assign cacop_hit_invalidate   = (reg_cacop_code[4:3] == 2'b10);
 
 
 // 主状态机
@@ -114,12 +107,12 @@ always @(*) begin
                         next_state = IDLE;
                 end
                 LOOKUP: begin
-                if (~cache_hit || ~reg_cacheable || reg_cacop_en && cacop_index_invalidate || reg_cacop_en && cacop_hit_invalidate && cache_hit) 
+                if (~cache_hit || ~reg_cacheable || cacop_index_invalidate || cacop_hit_invalidate && cache_hit) 
                         next_state = MISS;
                 // 流水线处理：如果命中，且新请求有效并无冲突，继续保持 LOOKUP 处理新请求
                 else if (valid && ~need_pause) 
                         next_state = LOOKUP;
-                else //reg_cacop_en && cacop_store_tag || reg_cacop_en && cacop_hit_invalidate && ~cache_hit
+                else // cacop_store_tag || cacop_hit_invalidate && ~cache_hit
                         next_state = IDLE;
                 end
                 MISS: begin
@@ -361,9 +354,32 @@ always @(posedge clk) begin
 end
 assign replace_way = random_way;
 
-assign tagv_wdata = {reg_tag, 1'b1}; // 替换时将新数据写入tagv
-assign tagv_addr  = {8{check        }} & index    |              
-                    {8{replace_write}} & reg_index;
+wire            cacop_store_tag;
+wire            cacop_index_invalidate;
+wire            cacop_hit_invalidate;
+wire  [20:0]    cacop_store_tag_data;
+wire  [20:0]    cacop_index_invalidate_data;
+wire  [20:0]    cacop_hit_invalidate_data;
+
+assign cacop_store_tag        = (reg_cacop_code[4:3] == 2'b00) && (cacop_en | reg_cacop_en);
+assign cacop_index_invalidate = (reg_cacop_code[4:3] == 2'b01) && (cacop_en | reg_cacop_en);
+assign cacop_hit_invalidate   = (reg_cacop_code[4:3] == 2'b10) && (cacop_en | reg_cacop_en);
+
+assign cacop_store_tag_data        = reg_cacop_addr[0]? {20'b0, tagv_w1_rdata[0]}: 
+                                                        {20'b0, tagv_w0_rdata[0]};
+assign cacop_index_invalidate_data = reg_cacop_addr[0]? {tagv_w1_rdata[20:1], 1'b0} :
+                                                        {tagv_w0_rdata[20:1], 1'b0};
+assign cacop_hit_invalidate_data   = way0_hit ?         {tagv_w0_rdata[20:1],1'b0}:
+                                     way1_hit ?         {tagv_w1_rdata[20:1],1'b0}:
+                                     21'b0;
+
+assign tagv_wdata = cacop_store_tag ? cacop_store_tag_data :
+                    cacop_hit_invalidate ? cacop_hit_invalidate_data:
+                    cacop_index_invalidate ? cacop_index_invalidate_data :
+                    {reg_tag, 1'b1}; // 替换时将新数据写入tagv
+
+assign tagv_addr  = (cacop_store_tag | cacop_index_invalidate | cacop_hit_invalidate) ? reg_cacop_addr[11:4] :
+                    {8{check}} & index | {8{replace_write}} & reg_index;
 
 assign tagv_w0_en = check || (replace_write && (replace_way == 1'b0));
 assign tagv_w1_en = check || (replace_write && (replace_way == 1'b1));
@@ -382,7 +398,7 @@ assign way1_load_word = way1_data[reg_offset[3:2]*32 +: 32];
 
 assign load_res = {32{way0_hit}} & way0_load_word |
                   {32{way1_hit}} & way1_load_word |
-                  {32{replace_write}} & ret_data;// 替换回写进cache
+                  {32{replace_write}} & ret_data;       // 替换回写进cache
 
 // dirty 表
 always @(posedge clk) begin
