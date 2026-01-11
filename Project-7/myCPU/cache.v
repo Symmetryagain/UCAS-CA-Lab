@@ -12,7 +12,7 @@ module cache (
         input   wire [ 31:0]    wdata,
         input   wire            cacop_en,
         input   wire [  4:0]    cacop_code,
-        input   wire  [31:0]    cacop_addr,
+        input   wire [ 31:0]    cacop_addr,
         output  wire            cacop_ok,
         output  wire            addr_ok,
         output  wire            data_ok,
@@ -124,9 +124,6 @@ always @(*) begin
                         next_state = MISS;
                 end
                 REPLACE: begin
-                // if(reg_cacop_en)
-                //         next_state = IDLE;
-                // else 
                 if (rd_rdy) 
                         next_state = REFILL;
                 else        
@@ -387,11 +384,10 @@ assign tagv_wdata = cacop_store_tag ? cacop_store_tag_data :
                     {reg_tag, 1'b1}; // 替换时将新数据写入tagv
 
 assign tagv_addr  = cacop_en? cacop_addr[11:4] :
-                    reg_cacop_en? reg_cacop_addr[11:4] :
                     {8{check}} & index | {8{replace_write}} & reg_index;
 
-assign tagv_w0_en = check || (replace_write && reg_cacheable && (replace_way == 1'b0)) || reg_cacop_en;
-assign tagv_w1_en = check || (replace_write && reg_cacheable && (replace_way == 1'b1)) || reg_cacop_en;
+assign tagv_w0_en = check || (replace_write && reg_cacheable && (replace_way == 1'b0)) || cacop_en;
+assign tagv_w1_en = check || (replace_write && reg_cacheable && (replace_way == 1'b1)) || cacop_en;
 assign tagv_w0_we = (cacop_hit_invalidate)? way0_hit:
                     (cacop_store_tag | cacop_index_invalidate)? ~reg_cacop_addr[0]:
                     replace_write && (replace_way == 1'b0) && (refill_counter == reg_offset[3:2]) && reg_cacheable;
@@ -504,20 +500,15 @@ assign rd_type = reg_cacheable? 3'b100 : 3'b010;
 assign rd_addr = reg_cacheable? {reg_tag, reg_index, 4'b0000} : 
                             {reg_tag, reg_index, reg_offset};
 
-// reg reg_wr_req;
-// always @(posedge clk) begin
-//         if (!resetn) begin
-//                 reg_wr_req <= 1'b0;
-//         end
-//         else if (current_state == MISS && next_state == REPLACE) begin
-//                 reg_wr_req <= 1'b1;
-//         end
-//         else if (wr_rdy) begin
-//                 reg_wr_req <= 1'b0;
-//         end
-// end
+reg cache_hit_dly;
+always @(posedge clk) begin
+        if (~resetn)
+                cache_hit_dly <= 1'b0;
+        else if (current_state == LOOKUP)
+                cache_hit_dly <= cache_hit;
+end
 
-assign wr_req   = (current_state == MISS) && (replace_dirty || (~reg_cacheable && reg_op) || (cacop_index_invalidate | cacop_hit_invalidate & cache_hit));
+assign wr_req   = (current_state == MISS) && (replace_dirty || (~reg_cacheable && reg_op) || (cacop_index_invalidate | cacop_hit_invalidate & cache_hit_dly));
 assign wr_type  = (reg_cacheable | reg_cacop_en)? 3'b100 : 3'b010;
 assign wr_wstrb = (reg_cacheable | reg_cacop_en)? 4'b1111 : reg_wstrb;
 assign wr_addr  = cacop_index_invalidate? {reg_cacop_addr[0]? tagv_w1_rdata[20:1]: tagv_w0_rdata[20:1] , reg_cacop_addr[11:4], 4'b0} :
