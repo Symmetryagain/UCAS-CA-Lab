@@ -106,13 +106,13 @@ always @(*) begin
                 else                            
                         next_state = IDLE;
                 end
-                LOOKUP: begin
+                LOOKUP: begin 
                 if (~cache_hit || ~reg_cacheable || cacop_index_invalidate || cacop_hit_invalidate && cache_hit) 
                         next_state = MISS;
                 // 流水线处理：如果命中，且新请求有效并无冲突，继续保持 LOOKUP 处理新请求
                 else if (valid && ~need_pause) 
                         next_state = LOOKUP;
-                else // cacop_store_tag || cacop_hit_invalidate && ~cache_hit
+                else 
                         next_state = IDLE;
                 end
                 MISS: begin
@@ -124,6 +124,9 @@ always @(*) begin
                         next_state = MISS;
                 end
                 REPLACE: begin
+                // if(reg_cacop_en)
+                //         next_state = IDLE;
+                // else 
                 if (rd_rdy) 
                         next_state = REFILL;
                 else        
@@ -252,9 +255,12 @@ wire [20:0] tagv_w1_rdata;
 
 assign {way0_tag, way0_v} = tagv_w0_rdata;
 assign {way1_tag, way1_v} = tagv_w1_rdata;
-assign way0_hit = way0_v && (way0_tag == reg_tag) && reg_cacheable;
-assign way1_hit = way1_v && (way1_tag == reg_tag) && reg_cacheable;
+assign way0_hit = cacop_hit_invalidate? (way0_tag == reg_cacop_addr[31:12]) && way0_v :
+                  way0_v && (way0_tag == reg_tag) && reg_cacheable;
+assign way1_hit = cacop_hit_invalidate? (way1_tag == reg_cacop_addr[31:12]) && way1_v :
+                  way1_v && (way1_tag == reg_tag) && reg_cacheable;
 assign cache_hit = way0_hit || way1_hit;
+
 wire [20:0] tagv_wdata;
 wire [ 7:0] tagv_addr;
 wire        tagv_w0_en;
@@ -285,7 +291,7 @@ data_bank_ram data_way0_bank0(
         .dina(data_wdata),
         .douta(data_w0_b0_rdata),
         .ena(data_w0_b0_en),
-        .wea(data_w0_b0_we)
+        .wea(data_w0_b0_we & {4{~reg_cacop_en}})
 );
 data_bank_ram data_way0_bank1(
         .addra(data_addr),
@@ -293,7 +299,7 @@ data_bank_ram data_way0_bank1(
         .dina(data_wdata),
         .douta(data_w0_b1_rdata),
         .ena(data_w0_b1_en),
-        .wea(data_w0_b1_we)
+        .wea(data_w0_b1_we & {4{~reg_cacop_en}})
 );
 data_bank_ram data_way0_bank2(
         .addra(data_addr),
@@ -301,7 +307,7 @@ data_bank_ram data_way0_bank2(
         .dina(data_wdata),
         .douta(data_w0_b2_rdata),
         .ena(data_w0_b2_en),
-        .wea(data_w0_b2_we)
+        .wea(data_w0_b2_we & {4{~reg_cacop_en}})
 );
 data_bank_ram data_way0_bank3(
         .addra(data_addr),
@@ -309,7 +315,7 @@ data_bank_ram data_way0_bank3(
         .dina(data_wdata),
         .douta(data_w0_b3_rdata),
         .ena(data_w0_b3_en),
-        .wea(data_w0_b3_we)
+        .wea(data_w0_b3_we & {4{~reg_cacop_en}})
 );
 data_bank_ram data_way1_bank0(
         .addra(data_addr),
@@ -317,7 +323,7 @@ data_bank_ram data_way1_bank0(
         .dina(data_wdata),
         .douta(data_w1_b0_rdata),
         .ena(data_w1_b0_en),
-        .wea(data_w1_b0_we)
+        .wea(data_w1_b0_we & {4{~reg_cacop_en}})
 );
 data_bank_ram data_way1_bank1(
         .addra(data_addr),
@@ -325,7 +331,7 @@ data_bank_ram data_way1_bank1(
         .dina(data_wdata),
         .douta(data_w1_b1_rdata),
         .ena(data_w1_b1_en),
-        .wea(data_w1_b1_we)
+        .wea(data_w1_b1_we & {4{~reg_cacop_en}})
 );
 data_bank_ram data_way1_bank2(
         .addra(data_addr),
@@ -333,7 +339,7 @@ data_bank_ram data_way1_bank2(
         .dina(data_wdata),
         .douta(data_w1_b2_rdata),
         .ena(data_w1_b2_en),
-        .wea(data_w1_b2_we)
+        .wea(data_w1_b2_we & {4{~reg_cacop_en}})
 );
 data_bank_ram data_way1_bank3(
         .addra(data_addr),
@@ -341,7 +347,7 @@ data_bank_ram data_way1_bank3(
         .dina(data_wdata),
         .douta(data_w1_b3_rdata),
         .ena(data_w1_b3_en),
-        .wea(data_w1_b3_we)
+        .wea(data_w1_b3_we & {4{~reg_cacop_en}})
 );
 
 wire replace_way;
@@ -357,13 +363,15 @@ assign replace_way = random_way;
 wire            cacop_store_tag;
 wire            cacop_index_invalidate;
 wire            cacop_hit_invalidate;
+
 wire  [20:0]    cacop_store_tag_data;
 wire  [20:0]    cacop_index_invalidate_data;
 wire  [20:0]    cacop_hit_invalidate_data;
 
-assign cacop_store_tag        = (reg_cacop_code[4:3] == 2'b00) && (cacop_en | reg_cacop_en);
-assign cacop_index_invalidate = (reg_cacop_code[4:3] == 2'b01) && (cacop_en | reg_cacop_en);
-assign cacop_hit_invalidate   = (reg_cacop_code[4:3] == 2'b10) && (cacop_en | reg_cacop_en);
+assign cacop_ok = ~(cacop_en | reg_cacop_en);
+assign cacop_store_tag        = (reg_cacop_code[4:3] == 2'b00) && reg_cacop_en;
+assign cacop_index_invalidate = (reg_cacop_code[4:3] == 2'b01) && reg_cacop_en;
+assign cacop_hit_invalidate   = (reg_cacop_code[4:3] == 2'b10) && reg_cacop_en;
 
 assign cacop_store_tag_data        = reg_cacop_addr[0]? {20'b0, tagv_w1_rdata[0]}: 
                                                         {20'b0, tagv_w0_rdata[0]};
@@ -381,10 +389,14 @@ assign tagv_wdata = cacop_store_tag ? cacop_store_tag_data :
 assign tagv_addr  = (cacop_store_tag | cacop_index_invalidate | cacop_hit_invalidate) ? reg_cacop_addr[11:4] :
                     {8{check}} & index | {8{replace_write}} & reg_index;
 
-assign tagv_w0_en = check || (replace_write && reg_cacheable && (replace_way == 1'b0));
-assign tagv_w1_en = check || (replace_write && reg_cacheable && (replace_way == 1'b1));
-assign tagv_w0_we = replace_write && (replace_way == 1'b0) && (refill_counter == reg_offset[3:2]) && reg_cacheable;
-assign tagv_w1_we = replace_write && (replace_way == 1'b1) && (refill_counter == reg_offset[3:2]) && reg_cacheable;
+assign tagv_w0_en = check || (replace_write && reg_cacheable && (replace_way == 1'b0)) || reg_cacop_en;
+assign tagv_w1_en = check || (replace_write && reg_cacheable && (replace_way == 1'b1)) || reg_cacop_en;
+assign tagv_w0_we = (cacop_hit_invalidate)? way0_hit:
+                    (cacop_store_tag | cacop_index_invalidate)? ~reg_cacop_addr[0]:
+                    replace_write && (replace_way == 1'b0) && (refill_counter == reg_offset[3:2]) && reg_cacheable;
+assign tagv_w1_we = (cacop_hit_invalidate)? way1_hit:
+                    (cacop_store_tag | cacop_index_invalidate)? reg_cacop_addr[0]:
+                    replace_write && (replace_way == 1'b1) && (refill_counter == reg_offset[3:2]) && reg_cacheable;
 
 
 wire [127:0] way0_data, way1_data, replace_data;
@@ -430,7 +442,8 @@ assign refill_data = ((refill_counter == reg_offset[3:2]) && reg_op)? rewrite_da
 assign data_wdata = replace_write? refill_data :
                     hitwrite? hitwrite_data : 32'b0;
 
-assign data_addr  = (replace_write) ? reg_index   :
+assign data_addr  = (cacop_index_invalidate | cacop_hit_invalidate) ? reg_cacop_addr[11:4] :
+                (replace_write) ? reg_index   :
                 (hitwrite           ? hitwrite_index ://hitwrite后存的数据，可能已被更新，不能直接使用寄存
                 (check              ? index       : 8'b0));
 
@@ -503,12 +516,18 @@ assign rd_addr = reg_cacheable? {reg_tag, reg_index, 4'b0000} :
 //         end
 // end
 
-assign wr_req = (current_state == MISS) && (replace_dirty || (~reg_cacheable && reg_op));
-assign wr_type = reg_cacheable? 3'b100 : 3'b010;
-assign wr_addr = ~reg_cacheable? {reg_tag, reg_index, reg_offset} :
-                 replace_way? {way1_tag, reg_index, 4'b0000} :
-                              {way0_tag, reg_index, 4'b0000};
-assign wr_wstrb = reg_cacheable? 4'b1111 : reg_wstrb;
-assign wr_data = reg_cacheable? replace_data : {96'b0, reg_wdata};
+assign wr_req   = (current_state == MISS) && (replace_dirty || (~reg_cacheable && reg_op) || (cacop_index_invalidate | cacop_hit_invalidate));
+assign wr_type  = (reg_cacheable | reg_cacop_en)? 3'b100 : 3'b010;
+assign wr_wstrb = (reg_cacheable | reg_cacop_en)? 4'b1111 : reg_wstrb;
+assign wr_addr  = cacop_index_invalidate? {reg_cacop_addr[0]? tagv_w1_rdata[20:1]: tagv_w0_rdata[20:1] , reg_cacop_addr[11:4], 4'b0} :
+                  cacop_hit_invalidate?   {way1_hit? tagv_w1_rdata[20:1]: tagv_w0_rdata[20:1], reg_cacop_addr[11:4], 4'b0} :
+                  ~reg_cacheable? {reg_tag, reg_index, reg_offset} :
+                  replace_way? {way1_tag, reg_index, 4'b0000} :
+                               {way0_tag, reg_index, 4'b0000};
+assign wr_data  = cacop_index_invalidate? reg_cacop_addr[0]? {data_w1_b3_rdata, data_w1_b2_rdata, data_w1_b1_rdata, data_w1_b0_rdata} : 
+                                                             {data_w0_b3_rdata, data_w0_b2_rdata, data_w0_b1_rdata, data_w0_b0_rdata} :
+                  cacop_hit_invalidate?   way1_hit?     {data_w1_b3_rdata, data_w1_b2_rdata, data_w1_b1_rdata, data_w1_b0_rdata} :
+                                                        {data_w0_b3_rdata, data_w0_b2_rdata, data_w0_b1_rdata, data_w0_b0_rdata} :
+                  reg_cacheable? replace_data : {96'b0, reg_wdata};
 
 endmodule

@@ -8,7 +8,7 @@ module WB #(
         input   wire            rst,
         // MEM -> WB
         input   wire            MEM_to_WB,
-        input   wire [186:0]    MEM_to_WB_zip,
+        input   wire [187:0]    MEM_to_WB_zip,
         input   wire [ 46:0]    MEM_except_zip,
         // WB -> MEM
         output  wire            WB_allowin,
@@ -91,13 +91,14 @@ wire            inst_tlbrd;
 wire            inst_tlbwr;
 wire            inst_tlbfill;
 wire            inst_invtlb;
+wire            inst_cacop;
 
 assign tlbrd = valid & inst_tlbrd;
 
-reg  [186:0]    MEM_to_WB_reg;
+reg  [187:0]    MEM_to_WB_reg;
 always @(posedge clk) begin
         if (rst) begin
-                MEM_to_WB_reg <= 187'b0;
+                MEM_to_WB_reg <= 188'b0;
         end
         else if (MEM_to_WB) begin
                 MEM_to_WB_reg <= MEM_to_WB_zip;
@@ -157,11 +158,11 @@ always @(posedge clk) begin
 end
 
 assign WB_allowin       = 1'b1;
-assign tlb_flush        = valid & (inst_tlbwr | inst_tlbfill | inst_invtlb);
+assign tlb_flush        = valid & (inst_tlbwr | inst_tlbfill | inst_invtlb | inst_cacop);
 assign tlb_flush_target = pc + 32'h4;
 
 assign {
-    MEM_to_WB_valid, pc, IR, gr_we, rf_waddr, rf_wdata, inst_tlbrd, inst_tlbwr, inst_tlbfill, inst_invtlb,
+    MEM_to_WB_valid, pc, IR, gr_we, rf_waddr, rf_wdata, inst_tlbrd, inst_tlbwr, inst_tlbfill, inst_invtlb, inst_cacop,
     csr_re, csr_we, csr_wmask, csr_wvalue, csr_num
 } = MEM_to_WB_reg;
 

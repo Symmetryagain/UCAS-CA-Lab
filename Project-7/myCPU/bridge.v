@@ -384,7 +384,7 @@ always @(posedge aclk) begin
     end
     else if(w_cur_state[0]) begin
         awaddr <= dcache_wr_addr;
-        awsize <= {1'b0, dcache_wr_type[1:0]};
+        awsize <= dcache_wr_type;
     end
 end
 

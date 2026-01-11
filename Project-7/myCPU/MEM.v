@@ -5,11 +5,11 @@ module MEM (
         output  wire            MEM_allowin,
         // EX -> MEM
         input   wire            EX_to_MEM,
-        input   wire [263:0]    EX_to_MEM_zip,
+        input   wire [264:0]    EX_to_MEM_zip,
         input   wire [ 14:0]    EX_except_zip,
         // MEM -> WB
         output  wire            MEM_to_WB,
-        output  wire [186:0]    MEM_to_WB_zip,
+        output  wire [187:0]    MEM_to_WB_zip,
         output  wire [ 46:0]    MEM_except_zip,
         // WB -> MEM
         input   wire            WB_allowin,
@@ -38,10 +38,10 @@ module MEM (
         output  wire            MEM_is_load
 );
 
-reg  [263:0]    EX_to_MEM_reg;
+reg  [264:0]    EX_to_MEM_reg;
 always @(posedge clk) begin
         if (rst) begin
-                EX_to_MEM_reg <= 264'b0;
+                EX_to_MEM_reg <= 265'b0;
         end
         else if (EX_to_MEM) begin
                 EX_to_MEM_reg <= EX_to_MEM_zip;
@@ -120,6 +120,7 @@ wire            inst_tlbrd;
 wire            inst_tlbwr;
 wire            inst_tlbfill;
 wire            inst_invtlb;
+wire            inst_cacop;
 
 wire            csr_re;
 wire [13:0]     csr_num;
@@ -218,7 +219,7 @@ assign  {
         inst_st_b, inst_st_h, inst_st_w, 
         mem_we, res_from_mem, gr_we, rkd_value, rf_waddr, 
         alu_result, is_csr, write_addr, cacheable,
-        inst_tlbsrch, inst_tlbrd, inst_tlbwr, inst_tlbfill, inst_invtlb,
+        inst_tlbsrch, inst_tlbrd, inst_tlbwr, inst_tlbfill, inst_invtlb, inst_cacop,
         csr_re, csr_we, csr_wmask, csr_wvalue, csr_num
 } = EX_to_MEM_reg;
 
@@ -270,7 +271,7 @@ assign write_data       = inst_st_b? {4{rkd_value[7:0]}}:
 
 assign MEM_to_WB_zip = {
         valid, pc, IR, gr_we, rf_waddr, rf_wdata, 
-        inst_tlbrd, inst_tlbwr, inst_tlbfill, inst_invtlb,
+        inst_tlbrd, inst_tlbwr, inst_tlbfill, inst_invtlb, inst_cacop,
         csr_re, csr_we, csr_wmask, csr_wvalue, csr_num
 };
 assign MEM_except_zip = {EX_except_reg, alu_result};

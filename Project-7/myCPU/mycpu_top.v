@@ -144,8 +144,8 @@ wire            WB_allowin;
 // internal pipeline zipes
 wire [ 65:0]    IF_to_ID_zip;
 wire [284:0]    ID_to_EX_zip;
-wire [263:0]    EX_to_MEM_zip;
-wire [186:0]    MEM_to_WB_zip;
+wire [264:0]    EX_to_MEM_zip;
+wire [187:0]    MEM_to_WB_zip;
 
 // IF <-> ID signals
 wire            ID_flush;
@@ -305,6 +305,9 @@ wire            w_v1;
 wire            tlb_flush;
 wire [31:0]     tlb_flush_target;
 
+wire            cacop_ok_icache;
+wire            cacop_ok_dcache;
+wire            cacop_done;
 wire            cacop_icache;
 wire            cacop_dcache;
 wire [ 4:0]     cacop_code;
@@ -333,6 +336,8 @@ assign {
 assign dcache_wstrb     = data_wstrb;
 assign dcache_wdata     = data_wdata;
 assign data_rdata       = dcache_rdata;
+
+assign cacop_done = cacop_icache & cacop_ok_icache | cacop_dcache & cacop_ok_dcache;
 
 // inst_retire_reg format: { pc(32), {4{rf_wen}}(4), rf_waddr(5), rf_wdata(32) }
 assign {
@@ -500,9 +505,10 @@ EX u_EX (
         .invtlb_valid   (invtlb_valid),
         .invtlb_op      (invtlb_op),
 
-        .addr_trans     (addr_trans),
+        .addr_trans     (ex_paddr),
         .addr_cacheable (addr_cacheable),
-        .except_tlbr    (except_tlbr_mem),
+        .except_tlbr    (except_tlbr_ex),
+        .except_pif_ex  (except_pif & cacop_icache),
         .except_pil     (except_pil),
         .except_pis     (except_pis),
         .except_pme     (except_pme),
@@ -519,7 +525,8 @@ EX u_EX (
         .cacop_icache   (cacop_icache),
         .cacop_dcache   (cacop_dcache),
         .cacop_code     (cacop_code),
-        .cacop_addr     (cacop_addr)
+        .cacop_addr     (cacop_addr),
+        .cacop_done     (cacop_done)
 );
 
 // MEM instance
@@ -686,12 +693,19 @@ csr u_csr (
         .csr_tlbelo1_data   (csr_tlbelo1_data)
 );
 
+wire            except_tlbr_ex;
+wire [31:0]     inst_vaddr;
+wire [31:0]     ex_paddr;
+assign except_tlbr_ex = cacop_icache & except_tlbr_if | except_tlbr_mem;
+assign inst_vaddr = cacop_icache? ex_vaddr: pc_next;
+assign ex_paddr = cacop_icache? pc_trans: addr_trans;
+
 // inst mmu instance
 mmu u_inst_mmu (
         .mem_we         (1'b0),
         .mmu_en         (1'b1),
         .is_if          (1'b1),
-        .vaddr          (pc_next),
+        .vaddr          (inst_vaddr),
         .paddr          (pc_trans),
         .cacheable      (pc_cacheable),
         .s_vppn         (s0_vppn),
@@ -829,8 +843,9 @@ cache u_I_Cache (
         .wstrb  (4'b0),
         .wdata  (32'b0),
         .cacop_en       (cacop_icache),
-        .cacop_code     (5'b0),
+        .cacop_code     (cacop_code),
         .cacop_addr     (cacop_addr),
+        .cacop_ok       (cacop_ok_icache),
         .addr_ok        (icache_addr_ok),
         .data_ok        (icache_data_ok),
         .rdata  (icache_rdata),
@@ -864,6 +879,7 @@ cache u_D_Cache (
         .cacop_en       (cacop_dcache),
         .cacop_code     (cacop_code),
         .cacop_addr     (cacop_addr),
+        .cacop_ok       (cacop_ok_dcache),
         .addr_ok        (dcache_addr_ok),
         .data_ok        (dcache_data_ok),
         .rdata  (dcache_rdata),

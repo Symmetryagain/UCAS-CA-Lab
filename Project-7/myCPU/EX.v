@@ -19,7 +19,7 @@ module EX #(
         input   wire [  8:0]    ID_except_zip,
         // EX -> MEM
         output  wire            EX_to_MEM,
-        output  wire [263:0]    EX_to_MEM_zip,
+        output  wire [264:0]    EX_to_MEM_zip,
         output  wire [ 14:0]    EX_except_zip,
         // MEM -> EX
         input   wire            MEM_allowin,
@@ -36,6 +36,7 @@ module EX #(
         input   wire [ 31:0]    addr_trans,
         input   wire            addr_cacheable,
         input   wire            except_tlbr,
+        input   wire            except_pif_ex,
         input   wire            except_pil,
         input   wire            except_pis,
         input   wire            except_pme,
@@ -52,6 +53,7 @@ module EX #(
         input   wire [ 63:0]    counter,
         
         // cacop
+        input   wire            cacop_done,
         output  wire            cacop_icache,
         output  wire            cacop_dcache,
         output  wire [4:0]      cacop_code, 
@@ -241,7 +243,7 @@ assign udiv_src_valid = wait_src_ready;
 assign div_res_ready = wait_res_valid;
 assign udiv_res_ready = wait_res_valid;
 
-assign mmu_en = valid & (res_from_mem | mem_we) & ~(|ID_except_reg);
+assign mmu_en = valid & (res_from_mem | mem_we | cacop_dcache) & ~(|ID_except_reg);
 
 assign invtlb_valid = valid & inst_invtlb;
 assign invtlb_op = rf_waddr;
@@ -364,14 +366,15 @@ assign EX_to_MEM_zip = {
         inst_st_b, inst_st_h, inst_st_w,
         mem_we, res_from_mem, gr_we, rkd_value, rf_waddr,
         compute_result, is_csr, addr_trans, addr_cacheable,
-        inst_tlbsrch, inst_tlbrd, inst_tlbwr, inst_tlbfill, inst_invtlb,
+        inst_tlbsrch, inst_tlbrd, inst_tlbwr, inst_tlbfill, inst_invtlb, inst_cacop,
         csr_re, csr_we, 
         csr_wmask | {16'b0, {16{inst_tlbsrch & s1_found}}}, 
         inst_tlbsrch ? {~s1_found, 15'b0, {LEN{1'b0}}, s1_index} : csr_wvalue,
         csr_num
 };
 
-assign EX_except_zip = {ID_except_reg, except_ale, except_tlbr, except_pil, except_pis, except_pme, except_ppi};
+;
+assign EX_except_zip = {ID_except_reg, except_ale, except_tlbr, except_pil | except_pif_ex, except_pis, except_pme, except_ppi};
 
 assign cacop_code  = rf_waddr;
 assign cacop_icache = (cacop_code[2:0]==3'b000) && inst_cacop && valid;
