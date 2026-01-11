@@ -386,7 +386,8 @@ assign tagv_wdata = cacop_store_tag ? cacop_store_tag_data :
                     cacop_index_invalidate ? cacop_index_invalidate_data :
                     {reg_tag, 1'b1}; // 替换时将新数据写入tagv
 
-assign tagv_addr  = (cacop_store_tag | cacop_index_invalidate | cacop_hit_invalidate) ? reg_cacop_addr[11:4] :
+assign tagv_addr  = cacop_en? cacop_addr[11:4] :
+                    reg_cacop_en? reg_cacop_addr[11:4] :
                     {8{check}} & index | {8{replace_write}} & reg_index;
 
 assign tagv_w0_en = check || (replace_write && reg_cacheable && (replace_way == 1'b0)) || reg_cacop_en;
@@ -516,7 +517,7 @@ assign rd_addr = reg_cacheable? {reg_tag, reg_index, 4'b0000} :
 //         end
 // end
 
-assign wr_req   = (current_state == MISS) && (replace_dirty || (~reg_cacheable && reg_op) || (cacop_index_invalidate | cacop_hit_invalidate));
+assign wr_req   = (current_state == MISS) && (replace_dirty || (~reg_cacheable && reg_op) || (cacop_index_invalidate | cacop_hit_invalidate & cache_hit));
 assign wr_type  = (reg_cacheable | reg_cacop_en)? 3'b100 : 3'b010;
 assign wr_wstrb = (reg_cacheable | reg_cacop_en)? 4'b1111 : reg_wstrb;
 assign wr_addr  = cacop_index_invalidate? {reg_cacop_addr[0]? tagv_w1_rdata[20:1]: tagv_w0_rdata[20:1] , reg_cacop_addr[11:4], 4'b0} :
