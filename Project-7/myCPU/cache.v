@@ -508,17 +508,25 @@ always @(posedge clk) begin
                 cache_hit_dly <= cache_hit;
 end
 
+reg way1_hit_dly;
+always @(posedge clk) begin
+        if (~resetn)
+                way1_hit_dly <= 1'b0;
+        else if (current_state == LOOKUP)
+                way1_hit_dly <= way1_hit;
+end
+
 assign wr_req   = (current_state == MISS) && (replace_dirty || (~reg_cacheable && reg_op) || (cacop_index_invalidate | cacop_hit_invalidate & cache_hit_dly));
 assign wr_type  = (reg_cacheable | reg_cacop_en)? 3'b100 : 3'b010;
 assign wr_wstrb = (reg_cacheable | reg_cacop_en)? 4'b1111 : reg_wstrb;
 assign wr_addr  = cacop_index_invalidate? {reg_cacop_addr[0]? tagv_w1_rdata[20:1]: tagv_w0_rdata[20:1] , reg_cacop_addr[11:4], 4'b0} :
-                  cacop_hit_invalidate?   {way1_hit? tagv_w1_rdata[20:1]: tagv_w0_rdata[20:1], reg_cacop_addr[11:4], 4'b0} :
+                  cacop_hit_invalidate?   {way1_hit_dly? tagv_w1_rdata[20:1]: tagv_w0_rdata[20:1], reg_cacop_addr[11:4], 4'b0} :
                   ~reg_cacheable? {reg_tag, reg_index, reg_offset} :
                   replace_way? {way1_tag, reg_index, 4'b0000} :
                                {way0_tag, reg_index, 4'b0000};
 assign wr_data  = cacop_index_invalidate? reg_cacop_addr[0]? {data_w1_b3_rdata, data_w1_b2_rdata, data_w1_b1_rdata, data_w1_b0_rdata} : 
                                                              {data_w0_b3_rdata, data_w0_b2_rdata, data_w0_b1_rdata, data_w0_b0_rdata} :
-                  cacop_hit_invalidate?   way1_hit?     {data_w1_b3_rdata, data_w1_b2_rdata, data_w1_b1_rdata, data_w1_b0_rdata} :
+                  cacop_hit_invalidate?   way1_hit_dly? {data_w1_b3_rdata, data_w1_b2_rdata, data_w1_b1_rdata, data_w1_b0_rdata} :
                                                         {data_w0_b3_rdata, data_w0_b2_rdata, data_w0_b1_rdata, data_w0_b0_rdata} :
                   reg_cacheable? replace_data : {96'b0, reg_wdata};
 
