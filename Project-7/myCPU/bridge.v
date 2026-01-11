@@ -130,6 +130,16 @@ assign reset = ~aresetn;
 wire need_wait;  
 assign need_wait = (araddr == awaddr) & (|w_cur_state[4:1]);
 
+reg rvalid_reg;
+always @(posedge aclk) begin
+        if (reset) begin
+                rvalid_reg <= 1'b0;
+        end
+        else begin
+                rvalid_reg <= rvalid;
+        end
+end
+
 // read_buffer
 always @(posedge aclk) begin
     if(reset) begin
@@ -459,13 +469,13 @@ end
 // ICache 读接口
 assign icache_rd_rdy     = ar_cur_state[0] & ~need_wait & ~rdata_req;
 assign icache_ret_data   = rdata_buffer[0];
-assign icache_ret_valid  = ~rid_reg[0] & (|r_cur_state[3:2]);
+assign icache_ret_valid  = ~rid_reg[0] & (|r_cur_state[3:2]) & rvalid_reg;
 assign icache_ret_last   = ~rid_reg[0] & r_cur_state[3];
 
 // DCache 读接口
 assign dcache_rd_rdy     = ar_cur_state[0] & ~need_wait & rdata_req;
 assign dcache_ret_data   = rdata_buffer[1];
-assign dcache_ret_valid  = rid_reg[0] & (|r_cur_state[3:2]);
+assign dcache_ret_valid  = rid_reg[0] & (|r_cur_state[3:2]) & rvalid_reg;
 assign dcache_ret_last   = rid_reg[0] & r_cur_state[3];
 
 // DCache 写接口
