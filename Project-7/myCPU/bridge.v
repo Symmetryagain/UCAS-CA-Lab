@@ -52,7 +52,7 @@ module bridge(
         output  wire [  3:0]    awid,
         output  reg  [ 31:0]    awaddr,
         output  reg  [  7:0]    awlen,
-        output  reg  [  2:0]    awsize,
+        output  wire [  2:0]    awsize,
         output  wire [  1:0]    awburst,
         output  wire [  1:0]    awlock,
         output  wire [  3:0]    awcache,
@@ -386,15 +386,14 @@ assign arburst = 2'b01;
 assign arlock  = 2'b0;
 assign arcache = 4'b0;
 assign arprot  = 3'b0;
+assign awsize  = 3'b010;
 
 always @(posedge aclk) begin
     if(reset) begin
         awaddr <= 32'b0;
-        awsize <= 3'b0;
     end
     else if(w_cur_state[0]) begin
         awaddr <= dcache_wr_addr;
-        awsize <= dcache_wr_type;
     end
 end
 
