@@ -53,7 +53,6 @@ module EX #(
         input   wire [ 63:0]    counter,
         
         // cacop
-        input   wire            cacop_done,
         output  wire            cacop_icache,
         output  wire            cacop_dcache,
         output  wire [4:0]      cacop_code, 
