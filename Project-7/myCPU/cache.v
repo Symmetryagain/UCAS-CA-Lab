@@ -13,7 +13,6 @@ module cache (
         input   wire            cacop_en,
         input   wire [  4:0]    cacop_code,
         input   wire [ 31:0]    cacop_addr,
-        output  wire            cacop_ok,
         output  wire            addr_ok,
         output  wire            data_ok,
         output  wire [ 31:0]    rdata,
@@ -353,7 +352,7 @@ always @(posedge clk) begin
         if(~resetn)
                 random_way <= 1'b0;
         else if(next_state == LOOKUP)
-                random_way <= $random() % 2;
+                random_way <= $random()[0];
 end
 assign replace_way = random_way;
 
@@ -365,7 +364,6 @@ wire  [20:0]    cacop_store_tag_data;
 wire  [20:0]    cacop_index_invalidate_data;
 wire  [20:0]    cacop_hit_invalidate_data;
 
-assign cacop_ok = ~(cacop_en | reg_cacop_en);
 assign cacop_store_tag        = (reg_cacop_code[4:3] == 2'b00) && reg_cacop_en;
 assign cacop_index_invalidate = (reg_cacop_code[4:3] == 2'b01) && reg_cacop_en;
 assign cacop_hit_invalidate   = (reg_cacop_code[4:3] == 2'b10) && reg_cacop_en;
@@ -519,7 +517,7 @@ end
 assign wr_req   = (current_state == MISS) && (replace_dirty || (~reg_cacheable && reg_op) || (cacop_index_invalidate | cacop_hit_invalidate & cache_hit_dly)) && |wr_addr;
 assign wr_type  = (reg_cacheable | reg_cacop_en)? 3'b100 : 3'b010;
 assign wr_wstrb = (reg_cacheable | reg_cacop_en)? 4'b1111 : reg_wstrb;
-assign wr_addr  = cacop_index_invalidate? {reg_cacop_addr[0]? tagv_w1_rdata[20:1]: tagv_w0_rdata[20:1] , reg_cacop_addr[11:4], 4'b0} :
+assign wr_addr  = cacop_index_invalidate? {reg_cacop_addr[0]? tagv_w1_rdata[20:1]: tagv_w0_rdata[20:1], reg_cacop_addr[11:4], 4'b0} :
                   cacop_hit_invalidate?   {way1_hit_dly? tagv_w1_rdata[20:1]: tagv_w0_rdata[20:1], reg_cacop_addr[11:4], 4'b0} :
                   ~reg_cacheable? {reg_tag, reg_index, reg_offset} :
                   replace_way? {way1_tag, reg_index, 4'b0000} :

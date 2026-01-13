@@ -222,9 +222,11 @@ wire            EX_is_load;
 wire            MEM_is_csr;
 wire            MEM_is_load;
 
+wire [31:0]     inst_vaddr;
 wire [31:0]     pc_next;
 wire [31:0]     pc_trans;
 wire            except_tlbr_if;
+wire            except_tlbr_ex;
 wire            except_tlbr_mem;
 wire            except_pif;
 wire            except_pil;
@@ -236,6 +238,7 @@ wire            except_ppi_mem;
 wire            mem_we;
 wire            mmu_en;
 wire [31:0]     addr_trans;
+wire [31:0]     ex_paddr;
 
 wire [31:0]     csr_dmw0_data;
 wire [31:0]     csr_dmw1_data;
@@ -305,13 +308,11 @@ wire            w_v1;
 wire            tlb_flush;
 wire [31:0]     tlb_flush_target;
 
-wire            cacop_ok_icache;
-wire            cacop_ok_dcache;
-wire            cacop_done;
 wire            cacop_icache;
 wire            cacop_dcache;
 wire [ 4:0]     cacop_code;
 wire [31:0]     cacop_addr;
+
 
 assign flush    = ertn_flush | wb_ex | tlb_flush;
 assign flush_target     = ertn_flush? csr_era_pc : 
@@ -320,6 +321,11 @@ assign flush_target     = ertn_flush? csr_era_pc :
 
 assign icache_valid     = inst_req;
 assign icache_op        = 1'b0;
+
+assign except_tlbr_ex   = cacop_icache & except_tlbr_if | except_tlbr_mem;
+assign inst_vaddr       = cacop_icache? ex_vaddr: pc_next;
+assign ex_paddr         = cacop_icache? pc_trans: addr_trans;
+
 assign {
         icache_tag, 
         icache_index, 
@@ -336,8 +342,6 @@ assign {
 assign dcache_wstrb     = data_wstrb;
 assign dcache_wdata     = data_wdata;
 assign data_rdata       = dcache_rdata;
-
-assign cacop_done = cacop_icache & cacop_ok_icache | cacop_dcache & cacop_ok_dcache;
 
 // inst_retire_reg format: { pc(32), {4{rf_wen}}(4), rf_waddr(5), rf_wdata(32) }
 assign {
@@ -525,8 +529,7 @@ EX u_EX (
         .cacop_icache   (cacop_icache),
         .cacop_dcache   (cacop_dcache),
         .cacop_code     (cacop_code),
-        .cacop_addr     (cacop_addr),
-        .cacop_done     (cacop_done)
+        .cacop_addr     (cacop_addr)
 );
 
 // MEM instance
@@ -693,13 +696,6 @@ csr u_csr (
         .csr_tlbelo1_data   (csr_tlbelo1_data)
 );
 
-wire            except_tlbr_ex;
-wire [31:0]     inst_vaddr;
-wire [31:0]     ex_paddr;
-assign except_tlbr_ex = cacop_icache & except_tlbr_if | except_tlbr_mem;
-assign inst_vaddr = cacop_icache? ex_vaddr: pc_next;
-assign ex_paddr = cacop_icache? pc_trans: addr_trans;
-
 // inst mmu instance
 mmu u_inst_mmu (
         .mem_we         (1'b0),
@@ -845,7 +841,6 @@ cache u_I_Cache (
         .cacop_en       (cacop_icache),
         .cacop_code     (cacop_code),
         .cacop_addr     (cacop_addr),
-        .cacop_ok       (cacop_ok_icache),
         .addr_ok        (icache_addr_ok),
         .data_ok        (icache_data_ok),
         .rdata  (icache_rdata),
@@ -879,7 +874,6 @@ cache u_D_Cache (
         .cacop_en       (cacop_dcache),
         .cacop_code     (cacop_code),
         .cacop_addr     (cacop_addr),
-        .cacop_ok       (cacop_ok_dcache),
         .addr_ok        (dcache_addr_ok),
         .data_ok        (dcache_data_ok),
         .rdata  (dcache_rdata),
