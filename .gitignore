@@ -1,2 +1,6 @@
 *.bit
 .nvim/
+*.aux
+*.log
+*.out
+*.synctex.gz

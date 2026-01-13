@@ -1,0 +1,895 @@
+From b19247a89df45aede6c90ad48b8cef1138648d23 Mon Sep 17 00:00:00 2001
+From: symmetree <symmetree@163.com>
+Date: Tue, 13 Jan 2026 17:07:32 +0800
+Subject: [PATCH] finished exp 23
+
+---
+ EX.v        |  32 ++++++---
+ ID.v        |  19 ++---
+ IF.v        |   2 +-
+ MEM.v       |  13 ++--
+ WB.v        |  11 +--
+ bridge.v    |  19 +++--
+ cache.v     | 198 ++++++++++++++++++++++++++++++++++------------------
+ csr.v       |   4 +-
+ mycpu_top.v |  40 +++++++++--
+ 9 files changed, 230 insertions(+), 108 deletions(-)
+
+diff --git a/EX.v b/EX.v
+index 309501d..be21b4a 100644
+--- a/EX.v
++++ b/EX.v
+@@ -15,11 +15,11 @@ module EX #(
+         output  wire            EX_is_load,
+         // ID -> EX
+         input   wire            ID_to_EX,
+-        input   wire [283:0]    ID_to_EX_zip,
++        input   wire [284:0]    ID_to_EX_zip,
+         input   wire [  8:0]    ID_except_zip,
+         // EX -> MEM
+         output  wire            EX_to_MEM,
+-        output  wire [263:0]    EX_to_MEM_zip,
++        output  wire [264:0]    EX_to_MEM_zip,
+         output  wire [ 14:0]    EX_except_zip,
+         // MEM -> EX
+         input   wire            MEM_allowin,
+@@ -36,6 +36,7 @@ module EX #(
+         input   wire [ 31:0]    addr_trans,
+         input   wire            addr_cacheable,
+         input   wire            except_tlbr,
++        input   wire            except_pif_ex,
+         input   wire            except_pil,
+         input   wire            except_pis,
+         input   wire            except_pme,
+@@ -49,7 +50,13 @@ module EX #(
+         input   wire [ 31:0]    csr_tlbehi_data,
+         input   wire [ 31:0]    csr_tlbidx_data,
+         /// counter
+-        input   wire [ 63:0]    counter
++        input   wire [ 63:0]    counter,
++        
++        // cacop
++        output  wire            cacop_icache,
++        output  wire            cacop_dcache,
++        output  wire [4:0]      cacop_code, 
++        output  wire [31:0]     cacop_addr
+ );
+ 
+ wire            valid;
+@@ -57,10 +64,10 @@ assign valid = ID_to_EX_valid & at_state & ~flush;
+ 
+ assign EX_to_MEM = readygo & MEM_allowin;
+ 
+-reg  [283:0]    ID_to_EX_reg;
++reg  [284:0]    ID_to_EX_reg;
+ always @(posedge clk) begin
+         if (rst) begin
+-                ID_to_EX_reg <= 284'b0;
++                ID_to_EX_reg <= 285'b0;
+         end
+         else if (ID_to_EX) begin
+                 ID_to_EX_reg <= ID_to_EX_zip;
+@@ -140,6 +147,7 @@ wire            inst_tlbrd;
+ wire            inst_tlbwr;
+ wire            inst_tlbfill;
+ wire            inst_invtlb;
++wire            inst_cacop;
+ 
+ wire            csr_re;
+ wire [13:0]     csr_num;
+@@ -163,7 +171,7 @@ assign  {
+         mem_we, res_from_mem, gr_we, rkd_value, rf_waddr,
+         inst_mul, inst_mulh, inst_mulhu, inst_div, inst_mod, inst_divu, inst_modu, 
+         inst_rdcntvh, inst_rdcntvl, is_csr,
+-        inst_tlbsrch, inst_tlbrd, inst_tlbwr, inst_tlbfill, inst_invtlb,
++        inst_tlbsrch, inst_tlbrd, inst_tlbwr, inst_tlbfill, inst_invtlb, inst_cacop,
+         csr_re, csr_we, csr_wmask, csr_wvalue, csr_num
+ } = ID_to_EX_reg;
+ 
+@@ -234,7 +242,7 @@ assign udiv_src_valid = wait_src_ready;
+ assign div_res_ready = wait_res_valid;
+ assign udiv_res_ready = wait_res_valid;
+ 
+-assign mmu_en = valid & (res_from_mem | mem_we) & ~(|ID_except_reg);
++assign mmu_en = valid & (res_from_mem | mem_we | cacop_dcache) & ~(|ID_except_reg);
+ 
+ assign invtlb_valid = valid & inst_invtlb;
+ assign invtlb_op = rf_waddr;
+@@ -357,13 +365,19 @@ assign EX_to_MEM_zip = {
+         inst_st_b, inst_st_h, inst_st_w,
+         mem_we, res_from_mem, gr_we, rkd_value, rf_waddr,
+         compute_result, is_csr, addr_trans, addr_cacheable,
+-        inst_tlbsrch, inst_tlbrd, inst_tlbwr, inst_tlbfill, inst_invtlb,
++        inst_tlbsrch, inst_tlbrd, inst_tlbwr, inst_tlbfill, inst_invtlb, inst_cacop,
+         csr_re, csr_we, 
+         csr_wmask | {16'b0, {16{inst_tlbsrch & s1_found}}}, 
+         inst_tlbsrch ? {~s1_found, 15'b0, {LEN{1'b0}}, s1_index} : csr_wvalue,
+         csr_num
+ };
+ 
+-assign EX_except_zip = {ID_except_reg, except_ale, except_tlbr, except_pil, except_pis, except_pme, except_ppi};
++;
++assign EX_except_zip = {ID_except_reg, except_ale, except_tlbr, except_pil | except_pif_ex, except_pis, except_pme, except_ppi};
++
++assign cacop_code  = rf_waddr;
++assign cacop_icache = (cacop_code[2:0]==3'b000) && inst_cacop && valid;
++assign cacop_dcache = (cacop_code[2:0]==3'b001) && inst_cacop && valid;
++assign cacop_addr   = (cacop_code[4:3]==2'b10)? addr_trans: alu_result;
+ 
+ endmodule
+diff --git a/ID.v b/ID.v
+index c6f8148..3f3b585 100644
+--- a/ID.v
++++ b/ID.v
+@@ -21,7 +21,7 @@ module ID(
+         input   wire            has_int,
+         // ID -> EX
+         output  wire            ID_to_EX,
+-        output  wire [283:0]    ID_to_EX_zip,
++        output  wire [284:0]    ID_to_EX_zip,
+         output  wire [  8:0]    ID_except_zip,
+         // EX -> ID
+         input   wire            EX_allowin,
+@@ -42,7 +42,7 @@ module ID(
+ assign ID_to_EX = readygo & EX_allowin;
+ 
+ wire      is_csr;
+-assign is_csr = inst_csrwr | inst_csrxchg | inst_rdcntid | inst_tlbrd | inst_tlbsrch;
++assign is_csr = inst_csrrd | inst_csrwr | inst_csrxchg | inst_rdcntid | inst_tlbrd | inst_tlbsrch;
+ 
+ reg             at_state;
+ always @(posedge clk) begin
+@@ -211,6 +211,7 @@ wire            inst_tlbrd;
+ wire            inst_tlbwr;
+ wire            inst_tlbfill;
+ wire            inst_invtlb;
++wire            inst_cacop;
+ 
+ wire            need_ui5;
+ wire            need_ui12;
+@@ -305,10 +306,11 @@ assign  inst_tlbrd      = op_31_26_d[6'h01] & op_25_22_d[4'h9] & op_21_20_d[2'h0
+ assign  inst_tlbwr      = op_31_26_d[6'h01] & op_25_22_d[4'h9] & op_21_20_d[2'h0] & op_19_15_d[5'h10] & (rk == 5'h0c) & (rj == 5'h00) & (rd == 5'h00);
+ assign  inst_tlbfill    = op_31_26_d[6'h01] & op_25_22_d[4'h9] & op_21_20_d[2'h0] & op_19_15_d[5'h10] & (rk == 5'h0d) & (rj == 5'h00) & (rd == 5'h00);
+ assign  inst_invtlb     = op_31_26_d[6'h01] & op_25_22_d[4'h9] & op_21_20_d[2'h0] & op_19_15_d[5'h13];
++assign  inst_cacop      = op_31_26_d[6'h01] & op_25_22_d[4'h8];
+ 
+ assign  alu_op[ 0]      = inst_add_w | inst_addi_w | inst_ld_w | inst_st_w
+                         | inst_ld_b | inst_ld_bu | inst_ld_h | inst_ld_hu | inst_st_b | inst_st_h
+-                        | inst_jirl | inst_bl | inst_pcaddu12i;
++                        | inst_jirl | inst_bl | inst_pcaddu12i | inst_cacop;
+ assign  alu_op[ 1]      = inst_sub_w;
+ assign  alu_op[ 2]      = inst_slt | inst_slti;
+ assign  alu_op[ 3]      = inst_sltu | inst_sltui;
+@@ -325,7 +327,7 @@ assign  need_ui5        =  inst_slli_w | inst_srli_w | inst_srai_w;
+ assign  need_ui12       =  inst_andi | inst_ori | inst_xori;
+ assign  need_si12       =  inst_addi_w | inst_ld_w | inst_st_w 
+                          | inst_ld_b | inst_ld_bu |inst_ld_h | inst_ld_hu | inst_st_b | inst_st_h
+-                         | inst_slti | inst_sltui;
++                         | inst_slti | inst_sltui | inst_cacop;
+ assign  need_si16       =  inst_jirl | inst_beq | inst_bne;
+ assign  need_si20       =  inst_lu12i_w | inst_pcaddu12i;
+ assign  need_si26       =  inst_b | inst_bl;
+@@ -367,14 +369,15 @@ assign  src2_is_imm     = inst_slli_w   |
+                           inst_andi     |
+                           inst_ori      |
+                           inst_xori     |
+-                          inst_pcaddu12i;
++                          inst_pcaddu12i|
++                          inst_cacop;
+ 
+ assign  res_from_mem    = inst_ld_w | inst_ld_b | inst_ld_bu | inst_ld_h | inst_ld_hu;
+ assign  dst_is_r1       = inst_bl;
+ assign  gr_we           = ~inst_st_w & ~inst_st_b & ~inst_st_h &
+                           ~inst_beq & ~inst_bne & ~inst_b & ~inst_blt & ~inst_bge & ~inst_bltu & ~inst_bgeu &
+                           ~inst_ertn &
+-                          ~inst_tlbsrch & ~inst_tlbrd & ~inst_tlbwr & ~inst_tlbfill & ~inst_invtlb;
++                          ~inst_tlbsrch & ~inst_tlbrd & ~inst_tlbwr & ~inst_tlbfill & ~inst_invtlb & ~inst_cacop;
+ assign  mem_we          = inst_st_w | inst_st_b | inst_st_h;
+ assign  dest            = dst_is_r1 ? 5'd1 : inst_rdcntid ? rj : rd;
+ 
+@@ -423,7 +426,7 @@ assign except_ine  = ~( inst_add_w   | inst_sub_w  | inst_slt     | inst_sltu
+                         inst_mulhu   | inst_div    | inst_mod     | inst_divu    | inst_modu    | inst_blt       | inst_bge     | inst_bltu    |
+                         inst_bgeu    | inst_ld_b   | inst_ld_h    | inst_ld_bu   | inst_ld_hu   | inst_st_b      | inst_st_h    |
+                         inst_csrrd   | inst_csrwr  | inst_csrxchg | inst_ertn    | inst_syscall | inst_break     | inst_rdcntid | inst_rdcntvl | inst_rdcntvh |
+-                        inst_tlbsrch | inst_tlbrd  | inst_tlbwr   | inst_tlbfill | inst_invtlb & ~(|rd[4:3]) & (rd[2:0] != 3'b111)
++                        inst_tlbsrch | inst_tlbrd  | inst_tlbwr   | inst_tlbfill | inst_invtlb & ~(|rd[4:3]) & (rd[2:0] != 3'b111) | inst_cacop
+                         ) & valid;
+ assign except_int  = has_int;
+ 
+@@ -436,7 +439,7 @@ assign ID_to_EX_zip = {
+         mem_we, res_from_mem, gr_we, rkd_value, dest,
+         inst_mul, inst_mulh, inst_mulhu, inst_div, inst_mod, inst_divu, inst_modu, 
+         inst_rdcntvh, inst_rdcntvl, is_csr,
+-        inst_tlbsrch, inst_tlbrd, inst_tlbwr, inst_tlbfill, inst_invtlb,
++        inst_tlbsrch, inst_tlbrd, inst_tlbwr, inst_tlbfill, inst_invtlb, inst_cacop,
+         csr_re, csr_we, csr_wmask, csr_wvalue, csr_num
+ };
+ 
+diff --git a/IF.v b/IF.v
+index 33a96aa..220e5b1 100644
+--- a/IF.v
++++ b/IF.v
+@@ -204,4 +204,4 @@ always @(posedge clk) begin
+         end
+ end
+ 
+-endmodule
++endmodule
+\ No newline at end of file
+diff --git a/MEM.v b/MEM.v
+index 6af9b20..0110f26 100644
+--- a/MEM.v
++++ b/MEM.v
+@@ -5,11 +5,11 @@ module MEM (
+         output  wire            MEM_allowin,
+         // EX -> MEM
+         input   wire            EX_to_MEM,
+-        input   wire [263:0]    EX_to_MEM_zip,
++        input   wire [264:0]    EX_to_MEM_zip,
+         input   wire [ 14:0]    EX_except_zip,
+         // MEM -> WB
+         output  wire            MEM_to_WB,
+-        output  wire [186:0]    MEM_to_WB_zip,
++        output  wire [187:0]    MEM_to_WB_zip,
+         output  wire [ 46:0]    MEM_except_zip,
+         // WB -> MEM
+         input   wire            WB_allowin,
+@@ -38,10 +38,10 @@ module MEM (
+         output  wire            MEM_is_load
+ );
+ 
+-reg  [263:0]    EX_to_MEM_reg;
++reg  [264:0]    EX_to_MEM_reg;
+ always @(posedge clk) begin
+         if (rst) begin
+-                EX_to_MEM_reg <= 264'b0;
++                EX_to_MEM_reg <= 265'b0;
+         end
+         else if (EX_to_MEM) begin
+                 EX_to_MEM_reg <= EX_to_MEM_zip;
+@@ -120,6 +120,7 @@ wire            inst_tlbrd;
+ wire            inst_tlbwr;
+ wire            inst_tlbfill;
+ wire            inst_invtlb;
++wire            inst_cacop;
+ 
+ wire            csr_re;
+ wire [13:0]     csr_num;
+@@ -218,7 +219,7 @@ assign  {
+         inst_st_b, inst_st_h, inst_st_w, 
+         mem_we, res_from_mem, gr_we, rkd_value, rf_waddr, 
+         alu_result, is_csr, write_addr, cacheable,
+-        inst_tlbsrch, inst_tlbrd, inst_tlbwr, inst_tlbfill, inst_invtlb,
++        inst_tlbsrch, inst_tlbrd, inst_tlbwr, inst_tlbfill, inst_invtlb, inst_cacop,
+         csr_re, csr_we, csr_wmask, csr_wvalue, csr_num
+ } = EX_to_MEM_reg;
+ 
+@@ -270,7 +271,7 @@ assign write_data       = inst_st_b? {4{rkd_value[7:0]}}:
+ 
+ assign MEM_to_WB_zip = {
+         valid, pc, IR, gr_we, rf_waddr, rf_wdata, 
+-        inst_tlbrd, inst_tlbwr, inst_tlbfill, inst_invtlb,
++        inst_tlbrd, inst_tlbwr, inst_tlbfill, inst_invtlb, inst_cacop,
+         csr_re, csr_we, csr_wmask, csr_wvalue, csr_num
+ };
+ assign MEM_except_zip = {EX_except_reg, alu_result};
+diff --git a/WB.v b/WB.v
+index 2067447..b887d51 100644
+--- a/WB.v
++++ b/WB.v
+@@ -8,7 +8,7 @@ module WB #(
+         input   wire            rst,
+         // MEM -> WB
+         input   wire            MEM_to_WB,
+-        input   wire [186:0]    MEM_to_WB_zip,
++        input   wire [187:0]    MEM_to_WB_zip,
+         input   wire [ 46:0]    MEM_except_zip,
+         // WB -> MEM
+         output  wire            WB_allowin,
+@@ -91,13 +91,14 @@ wire            inst_tlbrd;
+ wire            inst_tlbwr;
+ wire            inst_tlbfill;
+ wire            inst_invtlb;
++wire            inst_cacop;
+ 
+ assign tlbrd = valid & inst_tlbrd;
+ 
+-reg  [186:0]    MEM_to_WB_reg;
++reg  [187:0]    MEM_to_WB_reg;
+ always @(posedge clk) begin
+         if (rst) begin
+-                MEM_to_WB_reg <= 187'b0;
++                MEM_to_WB_reg <= 188'b0;
+         end
+         else if (MEM_to_WB) begin
+                 MEM_to_WB_reg <= MEM_to_WB_zip;
+@@ -157,11 +158,11 @@ always @(posedge clk) begin
+ end
+ 
+ assign WB_allowin       = 1'b1;
+-assign tlb_flush        = valid & (inst_tlbwr | inst_tlbfill | inst_invtlb);
++assign tlb_flush        = valid & (inst_tlbwr | inst_tlbfill | inst_invtlb | inst_cacop);
+ assign tlb_flush_target = pc + 32'h4;
+ 
+ assign {
+-    MEM_to_WB_valid, pc, IR, gr_we, rf_waddr, rf_wdata, inst_tlbrd, inst_tlbwr, inst_tlbfill, inst_invtlb,
++    MEM_to_WB_valid, pc, IR, gr_we, rf_waddr, rf_wdata, inst_tlbrd, inst_tlbwr, inst_tlbfill, inst_invtlb, inst_cacop,
+     csr_re, csr_we, csr_wmask, csr_wvalue, csr_num
+ } = MEM_to_WB_reg;
+ 
+diff --git a/bridge.v b/bridge.v
+index c533b27..9665f04 100644
+--- a/bridge.v
++++ b/bridge.v
+@@ -52,7 +52,7 @@ module bridge(
+         output  wire [  3:0]    awid,
+         output  reg  [ 31:0]    awaddr,
+         output  reg  [  7:0]    awlen,
+-        output  reg  [  2:0]    awsize,
++        output  wire [  2:0]    awsize,
+         output  wire [  1:0]    awburst,
+         output  wire [  1:0]    awlock,
+         output  wire [  3:0]    awcache,
+@@ -130,6 +130,16 @@ assign reset = ~aresetn;
+ wire need_wait;  
+ assign need_wait = (araddr == awaddr) & (|w_cur_state[4:1]);
+ 
++reg rvalid_reg;
++always @(posedge aclk) begin
++        if (reset) begin
++                rvalid_reg <= 1'b0;
++        end
++        else begin
++                rvalid_reg <= rvalid;
++        end
++end
++
+ // read_buffer
+ always @(posedge aclk) begin
+     if(reset) begin
+@@ -376,15 +386,14 @@ assign arburst = 2'b01;
+ assign arlock  = 2'b0;
+ assign arcache = 4'b0;
+ assign arprot  = 3'b0;
++assign awsize  = 3'b010;
+ 
+ always @(posedge aclk) begin
+     if(reset) begin
+         awaddr <= 32'b0;
+-        awsize <= 3'b0;
+     end
+     else if(w_cur_state[0]) begin
+         awaddr <= dcache_wr_addr;
+-        awsize <= {1'b0, dcache_wr_type[1:0]};
+     end
+ end
+ 
+@@ -459,13 +468,13 @@ end
+ // ICache 读接口
+ assign icache_rd_rdy     = ar_cur_state[0] & ~need_wait & ~rdata_req;
+ assign icache_ret_data   = rdata_buffer[0];
+-assign icache_ret_valid  = ~rid_reg[0] & (|r_cur_state[3:2]);
++assign icache_ret_valid  = ~rid_reg[0] & (|r_cur_state[3:2]) & rvalid_reg;
+ assign icache_ret_last   = ~rid_reg[0] & r_cur_state[3];
+ 
+ // DCache 读接口
+ assign dcache_rd_rdy     = ar_cur_state[0] & ~need_wait & rdata_req;
+ assign dcache_ret_data   = rdata_buffer[1];
+-assign dcache_ret_valid  = rid_reg[0] & (|r_cur_state[3:2]);
++assign dcache_ret_valid  = rid_reg[0] & (|r_cur_state[3:2]) & rvalid_reg;
+ assign dcache_ret_last   = rid_reg[0] & r_cur_state[3];
+ 
+ // DCache 写接口
+diff --git a/cache.v b/cache.v
+index 89c04eb..59ce479 100644
+--- a/cache.v
++++ b/cache.v
+@@ -10,6 +10,9 @@ module cache (
+         input   wire [  3:0]    offset,
+         input   wire [  3:0]    wstrb,
+         input   wire [ 31:0]    wdata,
++        input   wire            cacop_en,
++        input   wire [  4:0]    cacop_code,
++        input   wire [ 31:0]    cacop_addr,
+         output  wire            addr_ok,
+         output  wire            data_ok,
+         output  wire [ 31:0]    rdata,
+@@ -55,6 +58,9 @@ reg [ 3:0] reg_offset;
+ reg [ 3:0] reg_wstrb;
+ reg [31:0] reg_wdata;
+ reg        reg_cacheable;
++reg        reg_cacop_en;
++reg [4:0]  reg_cacop_code;
++reg [31:0] reg_cacop_addr;
+ 
+ reg  [255:0] dirty [1:0];
+ wire   replace_dirty;
+@@ -80,6 +86,8 @@ wire [ 3:0] data_w0_b0_we, data_w0_b1_we,
+         data_w1_b0_we, data_w1_b1_we, 
+         data_w1_b2_we, data_w1_b3_we;
+ 
++
++
+ // 主状态机
+ always @(posedge clk) begin
+ if (~resetn) 
+@@ -92,16 +100,16 @@ always @(*) begin
+         case (current_state)
+                 IDLE: begin
+                 // 如果没有检测到冲突，且请求有效，进入 LOOKUP
+-                if (valid && !need_pause) 
++                if (valid && ~need_pause || cacop_en) 
+                         next_state = LOOKUP;
+                 else                            
+                         next_state = IDLE;
+                 end
+-                LOOKUP: begin
+-                if (~cache_hit || ~reg_cacheable) 
++                LOOKUP: begin 
++                if (~cache_hit || ~reg_cacheable || cacop_index_invalidate || cacop_hit_invalidate && cache_hit) 
+                         next_state = MISS;
+                 // 流水线处理：如果命中，且新请求有效并无冲突，继续保持 LOOKUP 处理新请求
+-                else if (valid && !need_pause) 
++                else if (valid && ~need_pause) 
+                         next_state = LOOKUP;
+                 else 
+                         next_state = IDLE;
+@@ -109,7 +117,7 @@ always @(*) begin
+                 MISS: begin
+                 if (~reg_cacheable && reg_op && wr_rdy) 
+                         next_state = IDLE;
+-                else if (wr_rdy || (~reg_cacheable && ~reg_op) || (reg_cacheable && !replace_dirty)) 
++                else if (wr_rdy || (~reg_cacheable && ~reg_op) || (reg_cacheable && ~replace_dirty) || reg_cacop_en) 
+                         next_state = REPLACE;
+                 else                                
+                         next_state = MISS;
+@@ -173,14 +181,31 @@ assign need_pause = valid && !op &&
+ 
+ always @(posedge clk) begin
+         if (~resetn) begin
+-                reg_op <= 1'b0; reg_index <= 8'b0; reg_tag <= 20'b0;
+-                reg_offset <= 4'b0; reg_wstrb <= 4'b0; reg_wdata <= 32'b0;
++                reg_op <= 1'b0; 
++                reg_index <= 8'b0; 
++                reg_tag <= 20'b0;
++                reg_offset <= 4'b0; 
++                reg_wstrb <= 4'b0; 
++                reg_wdata <= 32'b0;
+                 reg_cacheable <= 1'b0;
++                reg_cacop_en <= 1'b0;
++                reg_cacop_code <= 5'b0;
++                reg_cacop_addr <= 32'b0;
+         end
+-        else if (check || keep_check) begin
+-                reg_op <= op; reg_index <= index; reg_tag <= tag;
+-                reg_offset <= offset; reg_wstrb <= wstrb; reg_wdata <= wdata;
++        else if (check || keep_check || cacop_en) begin
++                reg_op <= op; 
++                reg_index <= index; 
++                reg_tag <= tag;
++                reg_offset <= offset; 
++                reg_wstrb <= wstrb; 
++                reg_wdata <= wdata;
+                 reg_cacheable <= cacheable;
++                reg_cacop_en <= cacop_en;
++                reg_cacop_code <= cacop_code;
++                reg_cacop_addr <= cacop_addr;
++        end
++        else if(current_state==IDLE && ~cacop_en)begin
++                reg_cacop_en <= 1'b0;
+         end
+ end
+ 
+@@ -226,9 +251,12 @@ wire [20:0] tagv_w1_rdata;
+ 
+ assign {way0_tag, way0_v} = tagv_w0_rdata;
+ assign {way1_tag, way1_v} = tagv_w1_rdata;
+-assign way0_hit = way0_v && (way0_tag == reg_tag) && reg_cacheable;
+-assign way1_hit = way1_v && (way1_tag == reg_tag) && reg_cacheable;
++assign way0_hit = cacop_hit_invalidate? (way0_tag == reg_cacop_addr[31:12]) && way0_v :
++                  way0_v && (way0_tag == reg_tag) && reg_cacheable;
++assign way1_hit = cacop_hit_invalidate? (way1_tag == reg_cacop_addr[31:12]) && way1_v :
++                  way1_v && (way1_tag == reg_tag) && reg_cacheable;
+ assign cache_hit = way0_hit || way1_hit;
++
+ wire [20:0] tagv_wdata;
+ wire [ 7:0] tagv_addr;
+ wire        tagv_w0_en;
+@@ -259,7 +287,7 @@ data_bank_ram data_way0_bank0(
+         .dina(data_wdata),
+         .douta(data_w0_b0_rdata),
+         .ena(data_w0_b0_en),
+-        .wea(data_w0_b0_we)
++        .wea(data_w0_b0_we & {4{~reg_cacop_en}})
+ );
+ data_bank_ram data_way0_bank1(
+         .addra(data_addr),
+@@ -267,7 +295,7 @@ data_bank_ram data_way0_bank1(
+         .dina(data_wdata),
+         .douta(data_w0_b1_rdata),
+         .ena(data_w0_b1_en),
+-        .wea(data_w0_b1_we)
++        .wea(data_w0_b1_we & {4{~reg_cacop_en}})
+ );
+ data_bank_ram data_way0_bank2(
+         .addra(data_addr),
+@@ -275,7 +303,7 @@ data_bank_ram data_way0_bank2(
+         .dina(data_wdata),
+         .douta(data_w0_b2_rdata),
+         .ena(data_w0_b2_en),
+-        .wea(data_w0_b2_we)
++        .wea(data_w0_b2_we & {4{~reg_cacop_en}})
+ );
+ data_bank_ram data_way0_bank3(
+         .addra(data_addr),
+@@ -283,7 +311,7 @@ data_bank_ram data_way0_bank3(
+         .dina(data_wdata),
+         .douta(data_w0_b3_rdata),
+         .ena(data_w0_b3_en),
+-        .wea(data_w0_b3_we)
++        .wea(data_w0_b3_we & {4{~reg_cacop_en}})
+ );
+ data_bank_ram data_way1_bank0(
+         .addra(data_addr),
+@@ -291,7 +319,7 @@ data_bank_ram data_way1_bank0(
+         .dina(data_wdata),
+         .douta(data_w1_b0_rdata),
+         .ena(data_w1_b0_en),
+-        .wea(data_w1_b0_we)
++        .wea(data_w1_b0_we & {4{~reg_cacop_en}})
+ );
+ data_bank_ram data_way1_bank1(
+         .addra(data_addr),
+@@ -299,7 +327,7 @@ data_bank_ram data_way1_bank1(
+         .dina(data_wdata),
+         .douta(data_w1_b1_rdata),
+         .ena(data_w1_b1_en),
+-        .wea(data_w1_b1_we)
++        .wea(data_w1_b1_we & {4{~reg_cacop_en}})
+ );
+ data_bank_ram data_way1_bank2(
+         .addra(data_addr),
+@@ -307,7 +335,7 @@ data_bank_ram data_way1_bank2(
+         .dina(data_wdata),
+         .douta(data_w1_b2_rdata),
+         .ena(data_w1_b2_en),
+-        .wea(data_w1_b2_we)
++        .wea(data_w1_b2_we & {4{~reg_cacop_en}})
+ );
+ data_bank_ram data_way1_bank3(
+         .addra(data_addr),
+@@ -315,7 +343,7 @@ data_bank_ram data_way1_bank3(
+         .dina(data_wdata),
+         .douta(data_w1_b3_rdata),
+         .ena(data_w1_b3_en),
+-        .wea(data_w1_b3_we)
++        .wea(data_w1_b3_we & {4{~reg_cacop_en}})
+ );
+ 
+ wire replace_way;
+@@ -324,18 +352,46 @@ always @(posedge clk) begin
+         if(~resetn)
+                 random_way <= 1'b0;
+         else if(next_state == LOOKUP)
+-                random_way <= $random() % 2;
++                random_way <= $random()[0];
+ end
+ assign replace_way = random_way;
+ 
+-assign tagv_wdata = {reg_tag, 1'b1}; // 替换时将新数据写入tagv
+-assign tagv_addr  = {8{check        }} & index    |              
+-                    {8{replace_write}} & reg_index;
++wire            cacop_store_tag;
++wire            cacop_index_invalidate;
++wire            cacop_hit_invalidate;
++
++wire  [20:0]    cacop_store_tag_data;
++wire  [20:0]    cacop_index_invalidate_data;
++wire  [20:0]    cacop_hit_invalidate_data;
++
++assign cacop_store_tag        = (reg_cacop_code[4:3] == 2'b00) && reg_cacop_en;
++assign cacop_index_invalidate = (reg_cacop_code[4:3] == 2'b01) && reg_cacop_en;
++assign cacop_hit_invalidate   = (reg_cacop_code[4:3] == 2'b10) && reg_cacop_en;
++
++assign cacop_store_tag_data        = reg_cacop_addr[0]? {20'b0, tagv_w1_rdata[0]}: 
++                                                        {20'b0, tagv_w0_rdata[0]};
++assign cacop_index_invalidate_data = reg_cacop_addr[0]? {tagv_w1_rdata[20:1], 1'b0} :
++                                                        {tagv_w0_rdata[20:1], 1'b0};
++assign cacop_hit_invalidate_data   = way0_hit ?         {tagv_w0_rdata[20:1],1'b0}:
++                                     way1_hit ?         {tagv_w1_rdata[20:1],1'b0}:
++                                     21'b0;
++
++assign tagv_wdata = cacop_store_tag ? cacop_store_tag_data :
++                    cacop_hit_invalidate ? cacop_hit_invalidate_data:
++                    cacop_index_invalidate ? cacop_index_invalidate_data :
++                    {reg_tag, 1'b1}; // 替换时将新数据写入tagv
+ 
+-assign tagv_w0_en = check || (replace_write && (replace_way == 1'b0));
+-assign tagv_w1_en = check || (replace_write && (replace_way == 1'b1));
+-assign tagv_w0_we = replace_write && (replace_way == 1'b0) && (refill_counter == reg_offset[3:2]) && reg_cacheable;
+-assign tagv_w1_we = replace_write && (replace_way == 1'b1) && (refill_counter == reg_offset[3:2]) && reg_cacheable;
++assign tagv_addr  = cacop_en? cacop_addr[11:4] :
++                    {8{check}} & index | {8{replace_write}} & reg_index;
++
++assign tagv_w0_en = check || (replace_write && reg_cacheable && (replace_way == 1'b0)) || cacop_en;
++assign tagv_w1_en = check || (replace_write && reg_cacheable && (replace_way == 1'b1)) || cacop_en;
++assign tagv_w0_we = (cacop_hit_invalidate)? way0_hit:
++                    (cacop_store_tag | cacop_index_invalidate)? ~reg_cacop_addr[0]:
++                    replace_write && (replace_way == 1'b0) && (refill_counter == reg_offset[3:2]) && reg_cacheable;
++assign tagv_w1_we = (cacop_hit_invalidate)? way1_hit:
++                    (cacop_store_tag | cacop_index_invalidate)? reg_cacop_addr[0]:
++                    replace_write && (replace_way == 1'b1) && (refill_counter == reg_offset[3:2]) && reg_cacheable;
+ 
+ 
+ wire [127:0] way0_data, way1_data, replace_data;
+@@ -349,7 +405,7 @@ assign way1_load_word = way1_data[reg_offset[3:2]*32 +: 32];
+ 
+ assign load_res = {32{way0_hit}} & way0_load_word |
+                   {32{way1_hit}} & way1_load_word |
+-                  {32{replace_write}} & ret_data;// 替换回写进cache
++                  {32{replace_write}} & ret_data;       // 替换回写进cache
+ 
+ // dirty 表
+ always @(posedge clk) begin
+@@ -381,51 +437,52 @@ assign refill_data = ((refill_counter == reg_offset[3:2]) && reg_op)? rewrite_da
+ assign data_wdata = replace_write? refill_data :
+                     hitwrite? hitwrite_data : 32'b0;
+ 
+-assign data_addr  = (replace_write) ? reg_index   :
++assign data_addr  = (cacop_index_invalidate | cacop_hit_invalidate) ? reg_cacop_addr[11:4] :
++                (replace_write) ? reg_index   :
+                 (hitwrite           ? hitwrite_index ://hitwrite后存的数据，可能已被更新，不能直接使用寄存
+                 (check              ? index       : 8'b0));
+ 
+ assign data_w0_b0_en = check  && (offset[3:2] == 2'b00) || //此时读，不写
+                 hitwrite && (hitwrite_way == 1'b0) && (hitwrite_bank == 2'b00)  || 
+-                replace_write && (replace_way == 1'b0) && (refill_counter == 2'b00);
++                replace_write && reg_cacheable && (replace_way == 1'b0) && (refill_counter == 2'b00);
+ assign data_w0_b1_en = check  && (offset[3:2] == 2'b01) ||
+                 hitwrite && (hitwrite_way == 1'b0) && (hitwrite_bank == 2'b01)  ||
+-                replace_write && (replace_way == 1'b0) && (refill_counter == 2'b01);
++                replace_write && reg_cacheable && (replace_way == 1'b0) && (refill_counter == 2'b01);
+ assign data_w0_b2_en = check  && (offset[3:2] == 2'b10) ||
+                 hitwrite && (hitwrite_way == 1'b0) && (hitwrite_bank == 2'b10)  ||
+-                replace_write && (replace_way == 1'b0) && (refill_counter == 2'b10);
++                replace_write && reg_cacheable && (replace_way == 1'b0) && (refill_counter == 2'b10);
+ assign data_w0_b3_en = check  && (offset[3:2] == 2'b11) ||
+                 hitwrite && (hitwrite_way == 1'b0) && (hitwrite_bank == 2'b11)  ||
+-                replace_write && (replace_way == 1'b0) && (refill_counter == 2'b11);
++                replace_write && reg_cacheable && (replace_way == 1'b0) && (refill_counter == 2'b11);
+ assign data_w1_b0_en = check  && (offset[3:2] == 2'b00) ||
+                 hitwrite && (hitwrite_way == 1'b1) && (hitwrite_bank == 2'b00)  ||
+-                replace_write && (replace_way == 1'b1) && (refill_counter == 2'b00);
++                replace_write && reg_cacheable && (replace_way == 1'b1) && (refill_counter == 2'b00);
+ assign data_w1_b1_en = check  && (offset[3:2] == 2'b01) ||
+                 hitwrite && (hitwrite_way == 1'b1) && (hitwrite_bank == 2'b01)  ||
+-                replace_write && (replace_way == 1'b1) && (refill_counter == 2'b01);
++                replace_write && reg_cacheable && (replace_way == 1'b1) && (refill_counter == 2'b01);
+ assign data_w1_b2_en = check  && (offset[3:2] == 2'b10) ||
+                 hitwrite && (hitwrite_way == 1'b1) && (hitwrite_bank == 2'b10)  ||
+-                replace_write && (replace_way == 1'b1) && (refill_counter == 2'b10);
++                replace_write && reg_cacheable && (replace_way == 1'b1) && (refill_counter == 2'b10);
+ assign data_w1_b3_en = check  && (offset[3:2] == 2'b11) ||
+                 hitwrite && (hitwrite_way == 1'b1) && (hitwrite_bank == 2'b11)  ||
+-                replace_write && (replace_way == 1'b1) && (refill_counter == 2'b11);
++                replace_write && reg_cacheable && (replace_way == 1'b1) && (refill_counter == 2'b11);
+ 
+ assign data_w0_b0_we = {4{hitwrite && (hitwrite_way == 1'b0) && (hitwrite_bank == 2'b00)}} & hitwrite_strb |
+-                {4{replace_write&& (replace_way == 1'b0) && (refill_counter == 2'b00)}};
++                {4{replace_write && reg_cacheable && (replace_way == 1'b0) && (refill_counter == 2'b00)}};
+ assign data_w0_b1_we = {4{hitwrite && (hitwrite_way == 1'b0) && (hitwrite_bank == 2'b01)}} & hitwrite_strb |
+-                {4{replace_write && (replace_way == 1'b0) && (refill_counter == 2'b01)}};
++                {4{replace_write && reg_cacheable && (replace_way == 1'b0) && (refill_counter == 2'b01)}};
+ assign data_w0_b2_we = {4{hitwrite && (hitwrite_way == 1'b0) && (hitwrite_bank == 2'b10)}} & hitwrite_strb |
+-                {4{replace_write && (replace_way == 1'b0) && (refill_counter == 2'b10) }};
++                {4{replace_write && reg_cacheable && (replace_way == 1'b0) && (refill_counter == 2'b10)}};
+ assign data_w0_b3_we = {4{hitwrite && (hitwrite_way == 1'b0) && (hitwrite_bank == 2'b11)}} & hitwrite_strb |
+-                {4{replace_write && (replace_way == 1'b0) && (refill_counter == 2'b11)}};
++                {4{replace_write && reg_cacheable && (replace_way == 1'b0) && (refill_counter == 2'b11)}};
+ assign data_w1_b0_we = {4{hitwrite && (hitwrite_way == 1'b1) && (hitwrite_bank == 2'b00)}} & hitwrite_strb |
+-                {4{replace_write && (replace_way == 1'b1) && (refill_counter == 2'b00)}};
++                {4{replace_write && reg_cacheable && (replace_way == 1'b1) && (refill_counter == 2'b00)}};
+ assign data_w1_b1_we = {4{hitwrite && (hitwrite_way == 1'b1) && (hitwrite_bank == 2'b01)}} & hitwrite_strb |
+-                {4{replace_write && (replace_way == 1'b1) && (refill_counter == 2'b01)}};
++                {4{replace_write && reg_cacheable && (replace_way == 1'b1) && (refill_counter == 2'b01)}};
+ assign data_w1_b2_we = {4{hitwrite && (hitwrite_way == 1'b1) && (hitwrite_bank == 2'b10)}} & hitwrite_strb |
+-                {4{replace_write && (replace_way == 1'b1) && (refill_counter == 2'b10)}};
++                {4{replace_write && reg_cacheable && (replace_way == 1'b1) && (refill_counter == 2'b10)}};
+ assign data_w1_b3_we = {4{hitwrite && (hitwrite_way == 1'b1) && (hitwrite_bank == 2'b11)}} & hitwrite_strb |
+-                {4{replace_write && (replace_way == 1'b1) && (refill_counter == 2'b11)}};
++                {4{replace_write && reg_cacheable && (replace_way == 1'b1) && (refill_counter == 2'b11)}};
+ 
+ 
+ assign addr_ok = (current_state == IDLE) ||
+@@ -441,25 +498,34 @@ assign rd_type = reg_cacheable? 3'b100 : 3'b010;
+ assign rd_addr = reg_cacheable? {reg_tag, reg_index, 4'b0000} : 
+                             {reg_tag, reg_index, reg_offset};
+ 
+-// reg reg_wr_req;
+-// always @(posedge clk) begin
+-//         if (!resetn) begin
+-//                 reg_wr_req <= 1'b0;
+-//         end
+-//         else if (current_state == MISS && next_state == REPLACE) begin
+-//                 reg_wr_req <= 1'b1;
+-//         end
+-//         else if (wr_rdy) begin
+-//                 reg_wr_req <= 1'b0;
+-//         end
+-// end
+-
+-assign wr_req = (current_state == MISS) && (replace_dirty || (~reg_cacheable && reg_op));
+-assign wr_type = reg_cacheable? 3'b100 : 3'b010;
+-assign wr_addr = ~reg_cacheable? {reg_tag, reg_index, reg_offset} :
+-                 replace_way? {way1_tag, reg_index, 4'b0000} :
+-                              {way0_tag, reg_index, 4'b0000};
+-assign wr_wstrb = reg_cacheable? 4'b1111 : reg_wstrb;
+-assign wr_data = reg_cacheable? replace_data : {96'b0, reg_wdata};
++reg cache_hit_dly;
++always @(posedge clk) begin
++        if (~resetn)
++                cache_hit_dly <= 1'b0;
++        else if (current_state == LOOKUP)
++                cache_hit_dly <= cache_hit;
++end
++
++reg way1_hit_dly;
++always @(posedge clk) begin
++        if (~resetn)
++                way1_hit_dly <= 1'b0;
++        else if (current_state == LOOKUP)
++                way1_hit_dly <= way1_hit;
++end
++
++assign wr_req   = (current_state == MISS) && (replace_dirty || (~reg_cacheable && reg_op) || (cacop_index_invalidate | cacop_hit_invalidate & cache_hit_dly)) && |wr_addr;
++assign wr_type  = (reg_cacheable | reg_cacop_en)? 3'b100 : 3'b010;
++assign wr_wstrb = (reg_cacheable | reg_cacop_en)? 4'b1111 : reg_wstrb;
++assign wr_addr  = cacop_index_invalidate? {reg_cacop_addr[0]? tagv_w1_rdata[20:1]: tagv_w0_rdata[20:1], reg_cacop_addr[11:4], 4'b0} :
++                  cacop_hit_invalidate?   {way1_hit_dly? tagv_w1_rdata[20:1]: tagv_w0_rdata[20:1], reg_cacop_addr[11:4], 4'b0} :
++                  ~reg_cacheable? {reg_tag, reg_index, reg_offset} :
++                  replace_way? {way1_tag, reg_index, 4'b0000} :
++                               {way0_tag, reg_index, 4'b0000};
++assign wr_data  = cacop_index_invalidate? reg_cacop_addr[0]? {data_w1_b3_rdata, data_w1_b2_rdata, data_w1_b1_rdata, data_w1_b0_rdata} : 
++                                                             {data_w0_b3_rdata, data_w0_b2_rdata, data_w0_b1_rdata, data_w0_b0_rdata} :
++                  cacop_hit_invalidate?   way1_hit_dly? {data_w1_b3_rdata, data_w1_b2_rdata, data_w1_b1_rdata, data_w1_b0_rdata} :
++                                                        {data_w0_b3_rdata, data_w0_b2_rdata, data_w0_b1_rdata, data_w0_b0_rdata} :
++                  reg_cacheable? replace_data : {96'b0, reg_wdata};
+ 
+ endmodule
+\ No newline at end of file
+diff --git a/csr.v b/csr.v
+index 09d981d..c54f29e 100644
+--- a/csr.v
++++ b/csr.v
+@@ -545,7 +545,9 @@ assign csr_rvalue =     {32{csr_num == `CSR_CRMD  }} & csr_crmd_data
+                       | {32{csr_num == `CSR_TLBELO0}} & csr_tlbelo0_data
+                       | {32{csr_num == `CSR_TLBELO1}} & csr_tlbelo1_data
+                       | {32{csr_num == `CSR_ASID  }}  & csr_asid_data
+-                      | {32{csr_num == `CSR_TLBRENTRY}} & csr_tlbrentry_data;
++                      | {32{csr_num == `CSR_TLBRENTRY}} & csr_tlbrentry_data
++                      | {32{csr_num == `CSR_DMW0  }} & csr_dmw0_data
++                      | {32{csr_num == `CSR_DMW1  }} & csr_dmw1_data;
+ 
+ endmodule
+ 
+diff --git a/mycpu_top.v b/mycpu_top.v
+index 285a3fa..0ad5f58 100644
+--- a/mycpu_top.v
++++ b/mycpu_top.v
+@@ -143,9 +143,9 @@ wire            WB_allowin;
+ 
+ // internal pipeline zipes
+ wire [ 65:0]    IF_to_ID_zip;
+-wire [283:0]    ID_to_EX_zip;
+-wire [263:0]    EX_to_MEM_zip;
+-wire [186:0]    MEM_to_WB_zip;
++wire [284:0]    ID_to_EX_zip;
++wire [264:0]    EX_to_MEM_zip;
++wire [187:0]    MEM_to_WB_zip;
+ 
+ // IF <-> ID signals
+ wire            ID_flush;
+@@ -222,9 +222,11 @@ wire            EX_is_load;
+ wire            MEM_is_csr;
+ wire            MEM_is_load;
+ 
++wire [31:0]     inst_vaddr;
+ wire [31:0]     pc_next;
+ wire [31:0]     pc_trans;
+ wire            except_tlbr_if;
++wire            except_tlbr_ex;
+ wire            except_tlbr_mem;
+ wire            except_pif;
+ wire            except_pil;
+@@ -236,6 +238,7 @@ wire            except_ppi_mem;
+ wire            mem_we;
+ wire            mmu_en;
+ wire [31:0]     addr_trans;
++wire [31:0]     ex_paddr;
+ 
+ wire [31:0]     csr_dmw0_data;
+ wire [31:0]     csr_dmw1_data;
+@@ -305,6 +308,12 @@ wire            w_v1;
+ wire            tlb_flush;
+ wire [31:0]     tlb_flush_target;
+ 
++wire            cacop_icache;
++wire            cacop_dcache;
++wire [ 4:0]     cacop_code;
++wire [31:0]     cacop_addr;
++
++
+ assign flush    = ertn_flush | wb_ex | tlb_flush;
+ assign flush_target     = ertn_flush? csr_era_pc : 
+                           wb_ex?      {32{except_tlbr}} & csr_tlbrentry_data | {32{~except_tlbr}} & csr_eentry_data : 
+@@ -312,6 +321,11 @@ assign flush_target     = ertn_flush? csr_era_pc :
+ 
+ assign icache_valid     = inst_req;
+ assign icache_op        = 1'b0;
++
++assign except_tlbr_ex   = cacop_icache & except_tlbr_if | except_tlbr_mem;
++assign inst_vaddr       = cacop_icache? ex_vaddr: pc_next;
++assign ex_paddr         = cacop_icache? pc_trans: addr_trans;
++
+ assign {
+         icache_tag, 
+         icache_index, 
+@@ -495,9 +509,10 @@ EX u_EX (
+         .invtlb_valid   (invtlb_valid),
+         .invtlb_op      (invtlb_op),
+ 
+-        .addr_trans     (addr_trans),
++        .addr_trans     (ex_paddr),
+         .addr_cacheable (addr_cacheable),
+-        .except_tlbr    (except_tlbr_mem),
++        .except_tlbr    (except_tlbr_ex),
++        .except_pif_ex  (except_pif & cacop_icache),
+         .except_pil     (except_pil),
+         .except_pis     (except_pis),
+         .except_pme     (except_pme),
+@@ -509,7 +524,12 @@ EX u_EX (
+         .s1_index       (s1_index),
+         
+         .flush          (flush),
+-        .counter        (counter)
++        .counter        (counter),
++
++        .cacop_icache   (cacop_icache),
++        .cacop_dcache   (cacop_dcache),
++        .cacop_code     (cacop_code),
++        .cacop_addr     (cacop_addr)
+ );
+ 
+ // MEM instance
+@@ -681,7 +701,7 @@ mmu u_inst_mmu (
+         .mem_we         (1'b0),
+         .mmu_en         (1'b1),
+         .is_if          (1'b1),
+-        .vaddr          (pc_next),
++        .vaddr          (inst_vaddr),
+         .paddr          (pc_trans),
+         .cacheable      (pc_cacheable),
+         .s_vppn         (s0_vppn),
+@@ -818,6 +838,9 @@ cache u_I_Cache (
+         .offset (icache_offset),
+         .wstrb  (4'b0),
+         .wdata  (32'b0),
++        .cacop_en       (cacop_icache),
++        .cacop_code     (cacop_code),
++        .cacop_addr     (cacop_addr),
+         .addr_ok        (icache_addr_ok),
+         .data_ok        (icache_data_ok),
+         .rdata  (icache_rdata),
+@@ -848,6 +871,9 @@ cache u_D_Cache (
+         .offset (dcache_offset),
+         .wstrb  (dcache_wstrb),
+         .wdata  (dcache_wdata),
++        .cacop_en       (cacop_dcache),
++        .cacop_code     (cacop_code),
++        .cacop_addr     (cacop_addr),
+         .addr_ok        (dcache_addr_ok),
+         .data_ok        (dcache_data_ok),
+         .rdata  (dcache_rdata),
+-- 
+2.51.0
+
