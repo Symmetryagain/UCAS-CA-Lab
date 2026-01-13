@@ -1,0 +1,79 @@
+\documentclass{article}
+
+\usepackage[a4paper]{geometry}
+\geometry{left=2.5cm,right=2.5cm,top=3cm,bottom=3cm}
+\usepackage[UTF8,space,hyperref]{ctex}
+\usepackage{amsmath, amsthm, amssymb, bm, color, framed, graphicx, hyperref, mathrsfs, physics}
+\hypersetup{hidelinks,colorlinks=true,allcolors=black,pdfstartview=Fit,breaklinks=true}
+
+\title{Project 7 实验报告}
+\author{钱翰林 周远扬 石曜铭}
+\date{1/11/2026}
+
+\begin{document}
+\maketitle
+
+\section{小组分工情况说明}
+\begin{itemize}
+        \item 周远扬: 设计cache模块，修改转接桥，报告撰写
+        \item 石曜铭: 将cache集成到cpu，调试
+        \item 钱翰林: 添加cacop指令，报告撰写
+\end{itemize}
+
+\section{处理器结构设计图}
+\begin{figure}[htbp]
+        \centering
+        \includegraphics[width=15cm]{pics/graph.png}
+\end{figure}
+
+
+\section{主要设计点}
+
+\subsection{Cache模块设计}
+Cache需要处理读写操作，并且会有是否命中问题，因此依照着状态机的节奏，处理一次操作先需要check，检查命中情况，若未命中再向内存交互，之后replace并refill，脏块写回与新数据写入，并完成一整次的操作。
+对于写情况，另有一个状态机控制单独写，主状态机认为传给写状态机之后写操作即完成。
+
+need\_pause 包含两种情况：(1) 端口冲突：WriteBuffer 正在向一Bank 写，而新来的读请求也要读该Bank。
+(2) 数据相关：Lookup 阶段是Store，而新来的读请求访问同一地址(RAW)。
+
+\subsection{修改转接桥}
+
+为了集成Cache，需要bridge支持burst传输，所以需要改动状态机，使得读写可以多拍延续，并且考虑last信号。
+
+对于读写,可能是一拍或四拍，所以要考虑last等信号与实际传输过程，与Cache交互依赖状态机即可，与内存交互，就要自行计数。
+\subsection{在CPU中集成Cache}
+
+修改转接桥与top模块的相关接口，将ICache和DCache实例化。
+
+在实际将Cache集成进cpu的过程中，由于随机延迟的存在，需要bridge和Cache之间多次握手，防止错过信号。
+比如bridge中控制着传入Cache的rd\_rdy等握手信号，这些信号又控制着Cache主状态机，所以处理不当就会错过，需要一步步握手，控制信号保持，以不错漏信号处理
+
+而且同时集成ICache，DCache,就会导致读操作冲突，因为两个读端口缩为一个，这里就需要重新构建bridge中的ar状态机来完成控制，状态分别是init,wait,req，初始为init，wait负责在rdata时等待阻塞结束，req负责rinst和wait之后的rdata，发出握手
+\subsection{添加CACOP指令}
+
+Cacop指令在EX级发出，Cache收到cacop操作的相关信号后，Hit判断可以复用LookUp访问的Tag读出和比较部分，Cache行中V的修改可以复用Refill访问的数据通路，写回内存可以复用Replace访问的数据通路。
+
+需要注意的是hit\_invalidate进行虚实地址转换时会用到两个mmu，需要修改原先的数据通路，让EX级接收两个mmu转换的物理地址以及产生的异常信号。对于inst\_mmu，Cacop指令的优先级高于IF级的取指，这样导致IF级可能出现PC错误，因此在执行完Cacop指令后会flush进行指令重取，也可以避免相关的资源冲突。
+
+
+\section{调试}
+
+\subsection{cacop指令时序问题}
+
+cacop\_en拉高时没有及时更新tagv\_addr和tagv\_en，而用的是慢了一拍的reg\_cacop\_en，导致cacop指令的实现时序与cache状态机的状态不符。
+
+\subsection{I,D轮流读时，被need\_wait覆盖}
+
+Cache中的need\_wait,指写的同时需要读，那么读等待，由于延迟随机，新的读请求被need\_wait覆盖掉，
+其实是ar状态机的握手信号问题，wait时不该继续拉高，所以做出上面的改动，把wait时单独处理，不要握手以防丢掉信号
+
+\subsection{脏块回写时内容错误}
+
+写缺失时,要写的数据为内存旧数据叠加输入新数据，不能直接靠wstrb控制使能解决，因为wstrb为0就不再写入
+所以应该先得到要写入的叠加数据，再全部写入
+
+\subsection{wlast返回错误}
+
+因为写操作，考虑到burst,有一拍或四拍，所以wlast应该在两种情况下都能正确拉高，依靠bridge内部的写计数完成
+
+\end{document}
