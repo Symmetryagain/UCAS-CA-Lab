@@ -352,7 +352,7 @@ always @(posedge clk) begin
         if(~resetn)
                 random_way <= 1'b0;
         else if(next_state == LOOKUP)
-                random_way <= $random()[0];
+                random_way <= $random() % 2;
 end
 assign replace_way = random_way;
 
@@ -360,7 +360,6 @@ wire            cacop_store_tag;
 wire            cacop_index_invalidate;
 wire            cacop_hit_invalidate;
 
-wire  [20:0]    cacop_store_tag_data;
 wire  [20:0]    cacop_index_invalidate_data;
 wire  [20:0]    cacop_hit_invalidate_data;
 
@@ -368,15 +367,13 @@ assign cacop_store_tag        = (reg_cacop_code[4:3] == 2'b00) && reg_cacop_en;
 assign cacop_index_invalidate = (reg_cacop_code[4:3] == 2'b01) && reg_cacop_en;
 assign cacop_hit_invalidate   = (reg_cacop_code[4:3] == 2'b10) && reg_cacop_en;
 
-assign cacop_store_tag_data        = reg_cacop_addr[0]? {20'b0, tagv_w1_rdata[0]}: 
-                                                        {20'b0, tagv_w0_rdata[0]};
 assign cacop_index_invalidate_data = reg_cacop_addr[0]? {tagv_w1_rdata[20:1], 1'b0} :
                                                         {tagv_w0_rdata[20:1], 1'b0};
 assign cacop_hit_invalidate_data   = way0_hit ?         {tagv_w0_rdata[20:1],1'b0}:
                                      way1_hit ?         {tagv_w1_rdata[20:1],1'b0}:
                                      21'b0;
 
-assign tagv_wdata = cacop_store_tag ? cacop_store_tag_data :
+assign tagv_wdata = cacop_store_tag ? 21'b0 :
                     cacop_hit_invalidate ? cacop_hit_invalidate_data:
                     cacop_index_invalidate ? cacop_index_invalidate_data :
                     {reg_tag, 1'b1}; // 替换时将新数据写入tagv
