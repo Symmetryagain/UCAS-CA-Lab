@@ -516,7 +516,7 @@ always @(posedge clk) begin
                 way1_hit_dly <= way1_hit;
 end
 
-assign wr_req   = (current_state == MISS) && (replace_dirty || (~reg_cacheable && reg_op) || (cacop_index_invalidate | cacop_hit_invalidate & cache_hit_dly));
+assign wr_req   = (current_state == MISS) && (replace_dirty || (~reg_cacheable && reg_op) || (cacop_index_invalidate | cacop_hit_invalidate & cache_hit_dly)) && |wr_addr;
 assign wr_type  = (reg_cacheable | reg_cacop_en)? 3'b100 : 3'b010;
 assign wr_wstrb = (reg_cacheable | reg_cacop_en)? 4'b1111 : reg_wstrb;
 assign wr_addr  = cacop_index_invalidate? {reg_cacop_addr[0]? tagv_w1_rdata[20:1]: tagv_w0_rdata[20:1] , reg_cacop_addr[11:4], 4'b0} :
